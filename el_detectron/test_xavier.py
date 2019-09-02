@@ -30,7 +30,6 @@ def get_pic_info(PRE_PROCESS, IMG_FOLDER):
     :param IMG_FOLDER:
     :return:
     """
-
     logging.info('!!!getting pic information')
 
     # pre process
@@ -41,6 +40,7 @@ def get_pic_info(PRE_PROCESS, IMG_FOLDER):
     if PRE_PROCESS['switch']:
         logging.info('!!!start pre_process')
 
+        # 如果存在小图文件夹，先删除再新建
         if os.path.exists(IMG_FOLDER):
             shutil.rmtree(IMG_FOLDER)
         os.mkdir(IMG_FOLDER)
@@ -162,7 +162,6 @@ def auto_labeling(PRE_PROCESS, POST_PROCESS, OUTPUT_FOLDER, pic_shape, csv_total
     logging.info('!!!finish auto labeling')
 
 
-# plot pic
 def get_result_defect_loc(result_df):
     """
     读取检测的输出结果
@@ -234,31 +233,44 @@ def get_gold_defect_loc(result_df):
     return res
 
 
-def draw_rectangle(img_path, save_path, defect_loc):
+def draw_rectangle_0(img_path, save_path, result_loc):
+    """
+    无答案时绘制bbox
+    :param img_path:
+    :param save_path:
+    :param result_loc:
+    :return:
+    """
     font = cv2.FONT_HERSHEY_SIMPLEX
-    for name, type_loc in defect_loc.items():
+    for name, type_loc in result_loc.items():
         # print(name, loc)
         pic_file = os.path.join(img_path, name + ".jpg")
         if os.path.exists(pic_file):
             img_data = cv2.imread(pic_file)
 
             for i in type_loc:
-                defect_type, x1, x2, y1, y2, score = i.split("_")
+                splited_str = i.split("_")
+                if len(splited_str) == 8:
+                    defect_type, row, col, x1, x2, y1, y2, score = splited_str
+                else:
+                    defect_type, x1, x2, y1, y2, score = splited_str
+
                 x1, x2, y1, y2 = int(x1), int(x2), int(y1), int(y2)
-
-                if defect_type == "yinlie":
-                    color = (0, 0, 255)
-                elif defect_type == "shixiao":
-                    color = (0, 255, 0)
-                else:  # xuhan
-                    color = (255, 0, 0)
-
-                cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), color, 3)
-                cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, color, 2)
+                cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (255, 0, 0), 3)
+                cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (255, 0, 0), 3)
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
 
 def draw_rectangle_1(img_path, save_path, result_loc, gold_loc, line_dict):
+    """
+    有答案，有前处理时，绘制bbox。
+    :param img_path:
+    :param save_path:
+    :param result_loc: 检测结果（字典）
+    :param gold_loc: 答案（字典）
+    :param line_dict: 组件切分的行列号
+    :return:
+    """
     result_names = set(result_loc.keys())
     gold_names = set(gold_loc.keys())
 
@@ -283,20 +295,24 @@ def draw_rectangle_1(img_path, save_path, result_loc, gold_loc, line_dict):
                 row, col, x1, x2, y1, y2 = int(row) + 1, int(col) + 1, int(x1), int(x2), int(y1), int(y2)
 
                 if "_".join([defect_type, str(row), str(col)]) in g_info:
+                    # 正常检出为绿色
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 0), 3)
-                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 0), 2)
+                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 0), 3)
                 else:
+                    # 过检为黄色
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 2)
+                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
 
             for i in g_info:
                 defect_type, row, col = i.split("_")
                 row, col = int(row) - 1, int(col) - 1
-                x1, x2, y1, y2 = col_lines[col], row_lines[row], col_lines[col + 1], col_lines[col + 1]
+                x1, y1, x2, y2 = col_lines[col], row_lines[row], col_lines[col + 1], row_lines[row + 1]
 
-                if "_".join([defect_type, str(row), str(col)]) not in r_info:
+                temp = ["_".join(i.split("_")[:3]) for i in r_info]
+                if "_".join([defect_type, str(row), str(col)]) not in temp:
+                    # 漏检为红色框
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 0, 255), 3)
-                    cv2.putText(img_data, defect_type, (x1 - 12, y1 - 30), font, 1.2, (0, 0, 255), 2)
+                    cv2.putText(img_data, defect_type, (x1 - 12, y1 - 30), font, 1.2, (0, 0, 255), 3)
 
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
@@ -311,17 +327,15 @@ def draw_rectangle_1(img_path, save_path, result_loc, gold_loc, line_dict):
                 defect_type, row, col, x1, x2, y1, y2, score = i.split("_")
                 row, col, x1, x2, y1, y2 = int(row) + 1, int(col) + 1, int(x1), int(x2), int(y1), int(y2)
 
+                # 过检为黄色
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 2)
+                cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
 
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
     for name in miss_names:
-
         row_lines, col_lines = line_dict[name]
-
         g_info = gold_loc[name]
-
         pic_file = os.path.join(img_path, name + ".jpg")
         if os.path.exists(pic_file):
             img_data = cv2.imread(pic_file)
@@ -329,12 +343,79 @@ def draw_rectangle_1(img_path, save_path, result_loc, gold_loc, line_dict):
             for i in g_info:
                 defect_type, row, col = i.split("_")
                 row, col = int(row) - 1, int(col) - 1
-                x1, x2, y1, y2 = col_lines[col], row_lines[row], col_lines[col + 1], col_lines[col + 1]
-
-                cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                cv2.putText(img_data, defect_type, (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 2)
+                x1, y1, x2, y2 = col_lines[col], row_lines[row], col_lines[col + 1], row_lines[row + 1]
+                # 漏检为红色
+                cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 0, 255), 3)
+                cv2.putText(img_data, defect_type, (x1 - 12, y1 - 30), font, 1.2, (0, 0, 255), 3)
 
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
+
+
+def draw_rectangle_2(img_path, save_path, result_loc, gold_loc):
+    """
+    有答案，无前处理时，绘制bbox
+    :param img_path:
+    :param save_path:
+    :param result_loc: 检测结果（字典）
+    :param gold_loc: 答案（字典）
+    :return:
+    """
+    result_names = set(result_loc.keys())
+    gold_names = set(gold_loc.keys())
+
+    ok_names = result_names & gold_names
+    miss_names = gold_names - result_names
+    overkill_names = result_names - gold_names
+
+    # draw pic
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    for name in ok_names:
+        r_info = result_loc[name]
+        g_info = gold_loc[name]
+
+        pic_file = os.path.join(img_path, name + ".jpg")
+        if os.path.exists(pic_file):
+            img_data = cv2.imread(pic_file)
+
+            for i in r_info:
+                defect_type, x1, x2, y1, y2, score = i.split("_")
+                x1, x2, y1, y2 = int(x1), int(x2), int(y1), int(y2)
+
+                if defect_type in g_info:
+                    cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 0), 3)
+                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 0), 3)
+                else:
+                    cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
+                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
+            cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
+
+            for i in g_info:
+                if i not in [j.split("_")[0] for j in r_info]:
+                    shutil.copyfile(pic_file, os.path.join(save_path, name + "_miss_" + i + "_.jpg"))
+
+    for name in overkill_names:
+        r_info = result_loc[name]
+
+        pic_file = os.path.join(img_path, name + ".jpg")
+        if os.path.exists(pic_file):
+            img_data = cv2.imread(pic_file)
+
+            for i in r_info:
+                defect_type, x1, x2, y1, y2, score = i.split("_")
+                x1, x2, y1, y2 = int(x1), int(x2), int(y1), int(y2)
+
+                cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
+                cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
+
+            cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
+
+    for name in miss_names:
+        g_info = gold_loc[name]
+
+        pic_file = os.path.join(img_path, name + ".jpg")
+        if os.path.exists(pic_file):
+            for i in g_info:
+                shutil.copyfile(pic_file, os.path.join(save_path, name + "_miss_" + i + "_.jpg"))
 
 
 def check_config(yml_str):
@@ -343,7 +424,9 @@ def check_config(yml_str):
     :param yml_str:
     :return:
     """
+    print("\n>>>>>>>>----------------------------------------------------------------<<<<<<<<")
     print(yml_str)
+    print(">>>>>>>>----------------------------------------------------------------<<<<<<<<\n")
     answer = raw_input("Is the configuration file correct? [yes/no]:")
     while answer.upper() not in ["YES", "Y", "NO", "N"]:
         logging.info("Please input yes or no!")
@@ -362,16 +445,16 @@ def main():
 
     :return:
     """
-    # read and load test config file
-    # 1. check config contents
+    # 1 read and load test config file
+    # 1.1 check config contents
     yml_str = open('./config/yjh.yaml').read()
     if check_config(yml_str):
         logging.info("Please modify the configuration file!")
         exit(0)
-    # 2. load config
+    # 1.2 load config
     test_cfg = yaml.load(yml_str)
     PRE_PROCESS = test_cfg['pre_process']
-    IMG_FOLDER = test_cfg['img_folder']
+    IMG_CUT_FOLDER = test_cfg['img_cut_folder']
     OUTPUT_FOLDER = test_cfg['output_folder']
     MODEL = test_cfg['model']
     AUTO_LABELING = test_cfg['auto_labeling']
@@ -385,19 +468,19 @@ def main():
     os.makedirs(os.path.join(OUTPUT_FOLDER, 'bbox'))
 
     # get names and shapes of images
-    pic_shape, line_dict = get_pic_info(PRE_PROCESS, IMG_FOLDER)
+    pic_shape, line_dict = get_pic_info(PRE_PROCESS, IMG_CUT_FOLDER)
 
-    # make prediction
-    model_predict(MODEL, IMG_FOLDER, OUTPUT_FOLDER)
+    # 2 make prediction
+    model_predict(MODEL, IMG_CUT_FOLDER, OUTPUT_FOLDER)
 
     # get output csv file
-    csv_total = output_csv(IMG_FOLDER, OUTPUT_FOLDER, PRE_PROCESS, POST_PROCESS, line_dict)
+    csv_total = output_csv(IMG_CUT_FOLDER, OUTPUT_FOLDER, PRE_PROCESS, POST_PROCESS, line_dict)
 
-    # auto labeling
+    # 3. auto labeling
     if AUTO_LABELING['switch']:
         auto_labeling(PRE_PROCESS, POST_PROCESS, OUTPUT_FOLDER, pic_shape, csv_total)
 
-    # draw box
+    # 4. draw box
     img_folder = PRE_PROCESS['origin_folder']
     save_folder = os.path.join(OUTPUT_FOLDER, "img_with_box")
     if os.path.exists(save_folder):
@@ -408,19 +491,25 @@ def main():
     result_df = pd.read_csv(csv_path)
     result_loc = get_result_defect_loc(result_df)
 
-    # 2. 如果有答案，则读取答案
+    # 4.1 如果有答案，则读取答案
     gold_loc = {}
     if os.path.exists(EVALUATION['csv_path']):
         gold_df = pd.read_csv(EVALUATION['csv_path'])
         gold_loc = get_gold_defect_loc(gold_df)
 
-    # 3.
+    # 4.2 画图
     # 有前处理，无答案
     if PRE_PROCESS['switch'] and len(gold_loc) == 0:
-        draw_rectangle(img_folder, save_folder, result_loc)
+        draw_rectangle_0(img_folder, save_folder, result_loc)
     # 有前处理，有答案
     elif PRE_PROCESS['switch'] and len(gold_loc) > 0:
         draw_rectangle_1(img_folder, save_folder, result_loc, gold_loc, line_dict)
+    # 无前处理，无答案
+    elif not PRE_PROCESS['switch'] and len(gold_loc) == 0:
+        draw_rectangle_0(img_folder, save_folder, result_loc)
+    # 无前处理，有答案
+    else:
+        draw_rectangle_2(img_folder, save_folder, result_loc, gold_loc)
 
 
 if __name__ == "__main__":
