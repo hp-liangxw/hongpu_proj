@@ -1,0 +1,30 @@
+info:
+    author: xavier
+    report_version: v1.0
+pre_process:
+    switch: True
+    size:
+        rows: 6
+        cols: 12
+    origin_folder: '/data/el/tests/temp/img'
+img_folder: '/data/el/tests/temp/img_cut'
+output_folder: '/data/el/tests/temp/output'
+model:
+    yinlie:
+        threshold:
+            yinlie: 0.985
+            shixiao: 0.95
+        model_dir: '/data/el/trains/base_finetune_yinlie'
+    xuhan:
+        threshold:
+            xuhan: 0.99999
+        model_dir: '/data/el/trains/base_model_xuhan'
+auto_labeling:
+    switch: True
+post_process:
+    switch: False
+evaluation:
+    switch: True
+    csv_path: '/data/el/tests/xavier_test/defect_location.csv'
+
+
