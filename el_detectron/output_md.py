@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
 import datetime
-import numpy as np
-import pandas as pd
+import seaborn as sns
 from matplotlib import pyplot as plt
-
-import yaml
 
 
 def title_str():
     """
-
+    大标题
     :return:
     """
     title = """
@@ -21,7 +18,7 @@ def title_str():
 
 def module_basic_info(config_info):
     """
-
+    第一部分：基本信息
     :param config_info:
     :return:
     """
@@ -42,7 +39,7 @@ def module_basic_info(config_info):
 
 def module_config_info(config_info):
     """
-
+    第二部分：测试配置信息
     :param config_info:
     :return:
     """
@@ -74,85 +71,60 @@ def module_config_info(config_info):
     return module_str
 
 
-# # csv_path = os.path.join(OUTPUT_FOLDER, 'bbox', 'output_total.csv')
-# result_csv_path = r"D:\Desktop\gpu2_test\output_total.csv"
-# result_df = pd.read_csv(result_csv_path)
-# result_loc = get_result_defect_loc(result_df)
+def module_results_info(config_info, results):
+    """
+    第三部分：
+    1. 一共检测出多少缺陷，每种缺陷的占比，绘制饼图
+    2. 每种缺陷的置信度分布直方图
+    3. 热力图(TO DO)
+    :param config_info:
+    :return:
+    """
+    # 缺陷类型
+    defect_types = config_info.types_and_ratios.keys()
+    # loc_matrix = np.zeros((6, 12))  # 用于绘制热力图
 
-# n = {}
-# for _, infos in result_loc.items():
-#     for i in infos:
-#         t = i.split("_")[0]  # 缺陷名称
-#         if t in n.keys():
-#             n[t] += 1
-#         else:
-#             n[t] = 1
-#     x = []
-#     y = []
-#     for k, v in n.items():
-#         x.append(k)
-#         y.append(v)
-#     plt.pie(y, labels=x, autopct='%3.1f%%')
-#     plt.savefig("1.jpg")
-#     print("检测出有缺陷的电池片的数量：{}".format(n))
+    info = {}
+    for _, defects in results.items():
+        for d in defects:
+            d_type, _, _, _, _, score = d.split("_")[:6]
+            if d_type in defect_types:
+                if d_type in info.keys():
+                    info[d_type].append(score)
+                else:
+                    info[d_type] = [score]
 
-# answer_path = os.path.exists(EVALUATION['csv_path'])
-# if PRE_PROCESS["switch"]:  # 有前处理
-#     print("一共{}个组件".format(len(os.listdir(ORIGINAL_FOLDER))))
-#     print("一共检测出{}个有缺陷的组件".format(len(result_loc)))
-# else:  # 无前处理
-#     pass
-#
-#
-# if test_cfg["evaluation"]["switch"]:  # 需要进行评估时才会继续进行
-#
-#
-#     if not os.path.exists(answer_path):  # 无答案
-#         pass
-#     else:  # 有答案
-#         pass
-#
-#
-#
-# else:  # 不需要评估
-#     pass
+    # 绘制饼图
+    plt.figure(figsize=(6, 6))
+    values = []
+    labels = []
+    for i in defect_types:
+        values.append(len(info[i]))
+        labels.append(i)
+    plt.pie(values, labels=labels, labeldistance=1.1, autopct='%2.0f%%', startangle=90, pctdistance=0.7)
+    plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "defects_ratio.jpg"))
 
-# def select_defect_thresh(select_defect, defect_dict, standard_testsets, csv_bbox, step, miss_num, overkill_num,
-#                          if_preprocess):
-#     """
-#     根据测试集选择单个缺陷置信度
-#     param:
-#         select_defect: 待测缺陷, str
-#         defect_dict
-#         standard_testsets
-#         csv_bbox
-#         step: 查找置信度的步长, float
-#         miss_rate: 限制最多漏检比例, float
-#         overkill_rate: 限制最多漏检比例, float
-#     """
-#     total_missover = []
-#     start_th = defect_dict[select_defect]
-#     answer_defect = get_piclist_defect(standard_testsets, [select_defect], if_preprocess)
-#     for tmp_th in np.linspace(start_th, 1, int(round((1 - start_th) / step)), endpoint=False):
-#         tmp_defect = get_piclist_defect(csv_bbox[csv_bbox['score'] >= tmp_th], [select_defect], if_preprocess)
-#         miss_defect = answer_defect - tmp_defect
-#         over_defect = tmp_defect - answer_defect
-#         total_missover.append([tmp_th, len(miss_defect), len(over_defect), len(miss_defect) + len(over_defect)])
-#     total_missover = pd.DataFrame(total_missover)
-#     total_missover.columns = ['defect_th', 'miss_num', 'overkill_num', 'ng_num']
-#     filter_missover = total_missover[
-#         (total_missover['miss_num'] < miss_num) & (total_missover['overkill_num'] < overkill_num)]
-#     if len(filter_missover) != 0:
-#         defect_th = filter_missover['defect_th'][np.argmin(filter_missover['ng_num'])]
-#     else:
-#         defect_th = start_th
-#
-#     return defect_th, total_missover
+    # 绘制置信度直方图
+    for i in defect_types:
+        plt.figure(figsize=(6, 6))
+        sns.distplot(info[i])
+        plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "hist_{}.jpg".format(i)))
 
+    module_str = """
+三、测试结果统计
 
-# ----------------------------------------------------------------------------------------------------------------------
-# print(module_1)
-# with open("test.md", "w", encoding="utf-8") as f:
-#     f.write(title)
-#     f.write(module_1)
-#     f.write(module_2)
+1. 测试缺陷分布
+    ![]({})
+
+2. 置信度区间分布
+    """.format(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "defects_ratio.jpg"))
+
+    for i in defect_types:
+        module_str += """
+    ![]({})
+        """.format(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "hist_{}.jpg".format(i)))
+
+    module_str += """<br>"""
+
+    return module_str
+

@@ -106,6 +106,7 @@ class Config:
         os.makedirs(os.path.join(self.OUTPUT_FOLDER, 'csv'))
         os.makedirs(os.path.join(self.OUTPUT_FOLDER, 'img_with_box'))
         os.makedirs(os.path.join(self.OUTPUT_FOLDER, 'xml'))
+        os.makedirs(os.path.join(self.OUTPUT_FOLDER, 'pics'))
 
         # 再次查看配置信息正确性
         print("\n\n>>>>>>>>----------------------------------------------------------------<<<<<<<<\n")
@@ -595,7 +596,7 @@ def main(argv):
     # 四、画图
     # 缺陷类型
     defect_types = cfgs.types_and_ratios.keys()
-    # output_total.csv路径
+    # 读取output_total.csv
     csv_path = os.path.join(cfgs.OUTPUT_FOLDER, 'csv', 'output_total.csv')
     result_df = pd.read_csv(csv_path)
     # 输出文件夹
@@ -638,6 +639,11 @@ def main(argv):
         f_md.write(title_str())
         f_md.write(module_basic_info(cfgs))
         f_md.write(module_config_info(cfgs))
+        f_md.write(module_results_info(cfgs, result_loc))
+        # 若需要评估，则再增加最后部分
+        if cfgs.EVALUATION['switch']:
+            pass
+
     logging.info('===========================================================')
     logging.info('!!!finish write md file')
 
