@@ -26,5 +26,11 @@ post_process:
 evaluation:
     switch: True
     csv_path: '/data/el/tests/xavier_test/defect_location.csv'
+    select_th:
+        switch: True
+        step: 0.01
+        miss_number: 10
+        overkill_number: 100000
+
 
 

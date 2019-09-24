@@ -128,3 +128,31 @@ def module_results_info(config_info, results):
 
     return module_str
 
+
+def module_evaluation(config_info, ground_truth):
+    """
+    第四部分，评估测试结果
+    1. 答案基本情况。多少组件，多少缺陷。
+    2. 各个置信度下过检漏检情况，折线图。
+    3. 最终选择的置信度下，过检漏检情况，统计表。
+    4.
+    :return:
+    """
+    # 缺陷类型
+    defect_types = config_info.types_and_ratios.keys()
+
+    info = {}
+    for names, defects in ground_truth.items():
+        for d in defects:
+            d_type = d.split("_")[0]
+            if d_type in defect_types:
+                if d_type in info.keys():
+                    info[d_type] += 1
+                else:
+                    info[d_type] = 1
+
+    # 答案中总组件个数
+    print(len(info))
+    # 答案中各个缺陷的个数
+    for i in defect_types:
+        print(info[i])

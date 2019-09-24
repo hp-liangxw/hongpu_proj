@@ -642,7 +642,7 @@ def main(argv):
         f_md.write(module_results_info(cfgs, result_loc))
         # 若需要评估，则再增加最后部分
         if cfgs.EVALUATION['switch']:
-            pass
+            print(gold_loc)
 
     logging.info('===========================================================')
     logging.info('!!!finish write md file')
@@ -651,5 +651,5 @@ def main(argv):
 if __name__ == "__main__":
     # TODO
     # 1. 分文件夹
-    # 2. 缺陷类型改为可变换
+    #
     main(sys.argv)
