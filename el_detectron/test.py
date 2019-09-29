@@ -557,7 +557,7 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
                 shutil.copyfile(pic_file, os.path.join(save_path, name + "_miss_" + i + "_.jpg"))
 
 
-def main(argv):
+def main():
     """
     main function
     :param config_path: 配置文件路径
@@ -568,7 +568,7 @@ def main(argv):
     # 1.1 检查配置文件是否准确
     # 1.2 正确则读取配置文件，
     # 1.3 从配置文件中获取模型相关信息，主要是：缺陷类型，置信度，模型路径
-    config_path = argv[1]
+    config_path = r"config/config.yml"
     cfgs = Config(config_path)
     if cfgs.is_valid:
         print("Please modify the configuration file!")
@@ -634,6 +634,11 @@ def main(argv):
             draw_bbox_with_answer_with_pre(img_folder, save_folder, result_loc, gold_loc, line_dict)
 
     # 五、报告输出
+    csv_bbox = result_df.loc[:, ['pic_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class', 'score', 'post_status', 'row', 'col']].copy()
+    csv_bbox.loc[:, 'row'] = csv_bbox.loc[:, 'row'] + 1
+    csv_bbox.loc[:, 'col'] = csv_bbox.loc[:, 'col'] + 1
+    csv_bbox.loc[csv_bbox['class'] == 'shixiao', 'class'] = 'yinlie'
+
     md_path = os.path.join(cfgs.OUTPUT_FOLDER, 'summary.md')
     with open(md_path, "w") as f_md:
         f_md.write(title_str())
@@ -651,5 +656,4 @@ def main(argv):
 if __name__ == "__main__":
     # TODO
     # 1. 分文件夹
-    # 2. 缺陷类型改为可变换
-    main(sys.argv)
+    main()

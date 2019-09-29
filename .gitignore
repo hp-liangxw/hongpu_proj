@@ -1,5 +1,8 @@
 *.pyc
+*.jpg
+*.bmp
+
 .idea/*
 .DS_Store
 py3env/
-__pycache__/
+*.jpg
