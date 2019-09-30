@@ -12,6 +12,7 @@ import shutil
 import logging
 import pandas as pd
 import numpy as np
+from matplotlib import pyplot as plt
 from src.pre_process import grid_cut
 from src.yinlie_post_process import yinlie_xizhi
 from src.auto_labeling import csv2xml
@@ -108,6 +109,13 @@ class Config:
             if not os.path.exists(self.EVALUATION['csv_path']):
                 logger.info("path: {} not exists!".format(self.EVALUATION['csv_path']))
                 return 1
+            if self.EVALUATION['select_th']['switch'] is True:
+                select_th_keys = self.EVALUATION['select_th'].keys()
+                if 'step' not in select_th_keys or \
+                        'miss_number' not in select_th_keys or \
+                        'overkill_number' not in select_th_keys:
+                    logger.info("paramaters: {} not exists!".format("step, miss_number, overkill_number"))
+                    return 1
 
         # 创建输出文件夹
         if os.path.exists(self.OUTPUT_FOLDER):
@@ -431,24 +439,23 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
 
             for i in r_info:
                 defect_type, x1, x2, y1, y2, score, row, col = i.split("_")
-                row, col, x1, x2, y1, y2 = int(row) + 1, int(col) + 1, int(x1), int(x2), int(y1), int(y2)
+                row, col, x1, x2, y1, y2 = int(row), int(col), int(x1), int(x2), int(y1), int(y2)
 
                 if "_".join([defect_type, str(row), str(col)]) in g_info:
                     # 正常检出为绿色
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 0), 3)
-                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 0), 3)
+                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 0), 3)
                 else:
                     # 过检为黄色
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                    cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
+                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
 
             for i in g_info:
                 defect_type, row, col = i.split("_")
-                row, col = int(row) - 1, int(col) - 1
-                x1, y1, x2, y2 = col_lines[col], row_lines[row], col_lines[col + 1], row_lines[row + 1]
+                row, col = int(row), int(col)
+                x1, y1, x2, y2 = col_lines[col - 1], row_lines[row - 1], col_lines[col], row_lines[row]
 
-                temp = ["_".join(i.split("_")[:3]) for i in r_info]
-                if "_".join([defect_type, str(row), str(col)]) not in temp:
+                if i not in ["_".join([i.split("_")[0], i.split("_")[-2], i.split("_")[-1]]) for i in r_info]:
                     # 漏检为红色框
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 0, 255), 3)
                     cv2.putText(img_data, defect_type, (x1 - 12, y1 - 30), font, 1.2, (0, 0, 255), 3)
@@ -465,11 +472,11 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
 
             for i in r_info:
                 defect_type, x1, x2, y1, y2, score, row, col = i.split("_")
-                row, col, x1, x2, y1, y2 = int(row) + 1, int(col) + 1, int(x1), int(x2), int(y1), int(y2)
+                row, col, x1, x2, y1, y2 = int(row), int(col), int(x1), int(x2), int(y1), int(y2)
 
                 # 过检为黄色
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                cv2.putText(img_data, score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
+                cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
 
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
@@ -483,8 +490,8 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
 
             for i in g_info:
                 defect_type, row, col = i.split("_")
-                row, col = int(row) - 1, int(col) - 1
-                x1, y1, x2, y2 = col_lines[col], row_lines[row], col_lines[col + 1], row_lines[row + 1]
+                row, col = int(row), int(col)
+                x1, y1, x2, y2 = col_lines[col - 1], row_lines[row - 1], col_lines[col], row_lines[row]
                 # 漏检为红色
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 0, 255), 3)
                 cv2.putText(img_data, defect_type, (x1 - 12, y1 - 30), font, 1.2, (0, 0, 255), 3)
@@ -529,8 +536,8 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
                 # 过检
                 else:
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255),
-                                3)
+                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30),
+                                font, 1.2, (0, 255, 255), 3)
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
             # 漏检
@@ -563,6 +570,23 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
         if os.path.exists(pic_file):
             for i in g_info:
                 shutil.copyfile(pic_file, os.path.join(save_path, name + "_miss_" + i + "_.jpg"))
+
+
+def add_defect_2_info(defect, defect_types, info, score):
+    """
+
+    :param defect:
+    :param defect_types:
+    :param info:
+    :param score:
+    :return:
+    """
+    score = float(score)
+    if defect in defect_types:
+        if defect in info.keys():
+            info[defect].append(score)
+        else:
+            info[defect] = [score]
 
 
 def main():
@@ -602,7 +626,7 @@ def main():
 
     # 四、画图
     # 缺陷类型
-    defect_types = cfgs.types_and_ratios.keys()
+    all_defect_types = cfgs.types_and_ratios.keys()
     # 读取output_total.csv
     csv_path = os.path.join(cfgs.OUTPUT_FOLDER, 'csv', 'output_total.csv')
     result_df = pd.read_csv(csv_path)
@@ -610,58 +634,72 @@ def main():
     save_folder = os.path.join(cfgs.OUTPUT_FOLDER, "img_with_box")
 
     # 开始画图
+    gold_info = None
     # 4.1 无答案
     if not cfgs.EVALUATION['switch']:
-        # 无前处理
+        # 4.1.1 无前处理
         if not cfgs.PRE_PROCESS['switch']:
             img_folder = cfgs.IMG_CUT_FOLDER
-            result_loc = get_output_defect_info(result_df, defect_types, pre_process=False)
-        # 有前处理
+            result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=False)
+        # 4.1.2 有前处理
         else:
             img_folder = cfgs.PRE_PROCESS['origin_folder']
-            result_loc = get_output_defect_info(result_df, defect_types, pre_process=True)
-        # 绘图
+            result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=True)
+        # draw bbox
         draw_bbox_no_answer(img_folder, save_folder, result_loc)
     # 4.2 有答案
     else:
-        # 读取答案文件
+        # 4.2.1 无前处理
         gold_df = pd.read_csv(cfgs.EVALUATION['csv_path'])
-
+        gold_info = {}
         # 无前处理
         if not cfgs.PRE_PROCESS['switch']:
             img_folder = cfgs.IMG_CUT_FOLDER
-            result_loc = get_output_defect_info(result_df, defect_types, pre_process=False)
-            gold_loc = get_gold_defect_info(gold_df, defect_types, pre_process=False)
+            result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=False)
+            gold_loc = get_gold_defect_info(gold_df, all_defect_types, pre_process=False)
+            # draw bbox
             draw_bbox_with_answer_no_pre(img_folder, save_folder, result_loc, gold_loc)
-        # 有前处理
+            # 答案相关信息
+            for defects in gold_loc.values():
+                for i in defects:
+                    add_defect_2_info(i, all_defect_types, gold_info, 1)
+        # 4.2.2 有前处理
         else:
             img_folder = cfgs.PRE_PROCESS['origin_folder']
-            result_loc = get_output_defect_info(result_df, defect_types, pre_process=True)
-            gold_loc = get_gold_defect_info(gold_df, defect_types, pre_process=True)
+            result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=True)
+            gold_loc = get_gold_defect_info(gold_df, all_defect_types, pre_process=True)
+            # draw bbox
             draw_bbox_with_answer_with_pre(img_folder, save_folder, result_loc, gold_loc, line_dict)
+            # 答案相关信息
+            r = cfgs.PRE_PROCESS['size']['rows']
+            c = cfgs.PRE_PROCESS['size']['cols']
+            loc_matrix = np.zeros((r, c))  # 用于绘制热力图
+            for defects in gold_loc.values():
+                for i in defects:
+                    d_type, row, col = i.split("_")
+                    loc_matrix[int(row) - 1, int(col) - 1] += 1
+                    add_defect_2_info(d_type, all_defect_types, gold_info, 1)
+            # 绘制答案中缺陷分布热力图
+            plt.figure(figsize=(12, 6))
+            plt.pcolor(loc_matrix, cmap=plt.cm.Reds)
+            plt.savefig(os.path.join(cfgs.OUTPUT_FOLDER, 'pics', "heatmap_ground_truth.jpg"))
 
     # 五、报告输出
-    csv_bbox = result_df.loc[:,
-               ['pic_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class', 'score', 'post_status', 'row', 'col']].copy()
-    csv_bbox.loc[:, 'row'] = csv_bbox.loc[:, 'row'] + 1
-    csv_bbox.loc[:, 'col'] = csv_bbox.loc[:, 'col'] + 1
-    csv_bbox.loc[csv_bbox['class'] == 'shixiao', 'class'] = 'yinlie'
-
     md_path = os.path.join(cfgs.OUTPUT_FOLDER, 'summary.md')
     with open(md_path, "w") as f_md:
         f_md.write(title_str())
         f_md.write(module_basic_info(cfgs))
         f_md.write(module_config_info(cfgs))
         f_md.write(module_results_info(cfgs, result_loc))
+
         # 若需要评估，则再增加最后部分
         if cfgs.EVALUATION['switch']:
-            pass
+            if gold_info is not None:
+                f_md.write(module_evaluation(cfgs, gold_info, result_df))
 
     logger.info('===========================================================')
     logger.info('!!!finish write md file')
 
 
 if __name__ == "__main__":
-    # TODO
-    # 1. 分文件夹
     main()

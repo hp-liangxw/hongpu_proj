@@ -104,11 +104,10 @@ def module_results_info(config_info, alg_results):
     :param config_info:
     :return:
     """
-
-    # 缺陷类型
+    # 所有缺陷类型
     all_defect_types = config_info.types_and_ratios.keys()
 
-    needed_info = {}
+    res_info = {}
     if config_info.PRE_PROCESS['switch']:  # 有前处理
         # 共检测了多少张图片
         img_num = len(os.listdir(config_info.PRE_PROCESS['origin_folder']))
@@ -120,7 +119,7 @@ def module_results_info(config_info, alg_results):
             for i in defects:
                 d, _, _, _, _, score, row, col = i.split("_")
                 loc_matrix[int(row) - 1, int(col) - 1] += 1
-                add_defect_2_info(d, all_defect_types, needed_info, score)
+                add_defect_2_info(d, all_defect_types, res_info, score)
     else:  # 无前处理
         # 共检测了多少张图片
         img_num = len(os.listdir(config_info.IMG_CUT_FOLDER))
@@ -129,18 +128,19 @@ def module_results_info(config_info, alg_results):
         for _, defects in alg_results.items():
             for i in defects:
                 d, x1, x2, y1, y2, score = i.split("_")
+                print()
                 loc_matrix[int(y1):int(y2), int(x1):int(x2)] += 1
-                add_defect_2_info(d, all_defect_types, needed_info, score)
+                add_defect_2_info(d, all_defect_types, res_info, score)
 
     # 检测到的缺陷类型
-    detected_types = needed_info.keys()
+    detected_types = res_info.keys()
 
     # 绘制饼图
     plt.figure(figsize=(6, 6))
     values = []
     labels = []
     for i in detected_types:
-        values.append(len(needed_info[i]))
+        values.append(len(res_info[i]))
         labels.append(i)
     plt.pie(values, labels=labels, labeldistance=1.1, autopct='%2.0f%%', startangle=90, pctdistance=0.7)
     plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "defects_ratio.jpg"))
@@ -148,12 +148,12 @@ def module_results_info(config_info, alg_results):
     # 绘制置信度直方图
     for i in detected_types:
         plt.figure(figsize=(6, 6))
-        sns.distplot(needed_info[i])
+        sns.distplot(res_info[i])
         plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "hist_{}.jpg".format(i)))
 
     # 绘制热力图
     plt.figure(figsize=(6, 6))
-    sns.heatmap(loc_matrix, linewidths=0.05, vmax=math.ceil(np.max(loc_matrix) / 10) * 10, vmin=0, cmap='rainbow')
+    plt.pcolor(loc_matrix, cmap=plt.cm.Reds)
     plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "heatmap_alg_results.jpg"))
 
     # --------------------
@@ -171,7 +171,7 @@ def module_results_info(config_info, alg_results):
 
     for i in detected_types:
         module_str += """
-    |{}|{}|""".format(i, len(needed_info[i]))
+    |{}|{}|""".format(i, len(res_info[i]))
 
     module_str += """
     
@@ -249,7 +249,7 @@ def select_defect_thresh(select_defect, defect_dict, standard_testsets, csv_bbox
     return defect_th, total_missover
 
 
-def module_evaluation(config_info, ground_truth, csv_bbox):
+def module_evaluation(config_info, gt_info, result_df):
     """
     第四部分，评估测试结果
     1. 答案基本情况。多少组件，多少缺陷。
@@ -258,41 +258,50 @@ def module_evaluation(config_info, ground_truth, csv_bbox):
     4.
     :return:
     """
-    # 缺陷类型
-    defect_types = config_info.types_and_ratios.keys()
+    # 所有缺陷类型
+    all_defect_types = config_info.types_and_ratios.keys()
+    # 答案中的缺陷类型
+    gold_types = gt_info.keys()
+    #
+    num = 0
+    for i in gt_info.values():
+        num += len(i)
+    # --------------------
+    # markdown字符串
+    module_str = """
+# 四、测试评估
 
-    info = {}
-    pic_list = []
-    if config_info.PRE_PROCESS['switch']:
-        r = config_info.PRE_PROCESS['size']['rows']
-        c = config_info.PRE_PROCESS['size']['cols']
-        loc_matrix = np.zeros((r, c))  # 用于绘制热力图
-        for names, defects in ground_truth.items():
-            for d in defects:
-                d_type, row, col = d.split("_")
-                loc_matrix[int(row), int(col)] += 1
-                pic_list.append("-".join([names, row, col]))
-                if d_type in defect_types:
-                    if d_type in info.keys():
-                        info[d_type] += 1
-                    else:
-                        info[d_type] = 1
+1. 答案基本情况
+    
+    答案中总图片数量: {}
 
-        # 绘制热力图
-        plt.figure(figsize=(6, 6))
-        sns.heatmap(loc_matrix, linewidths=0.05, vmax=math.ceil(np.max(loc_matrix) / 10) * 10, vmin=0, cmap='rainbow')
-        heatmap_ground_truth = os.path.join(config_info.OUTPUT_FOLDER, 'pics', "heatmap_ground_truth.jpg")
-        plt.savefig(heatmap_ground_truth)
+    |缺陷名称|缺陷个数|
+    | --- | --- |""".format(num)
 
-        # 选择合适置信度
-        step = 0.001
-        miss_num = 10
-        overkill_num = 1000000000
+    for i in gold_types:
+        module_str += """
+    |{}|{}|""".format(i, len(gt_info[i]))
+
+    module_str += """
+
+    答案缺陷分布热力图
+    ![]({})
+<br>
+    """.format(os.path.join('pics', "heatmap_ground_truth.jpg"))
+
+    # 选择合适置信度
+    if config_info.EVALUATION['select_th']['switch'] is True:
+        step = config_info.EVALUATION['select_th']['step']
+        miss_num = config_info.EVALUATION['select_th']['miss_number']
+        overkill_num = config_info.EVALUATION['select_th']['overkill_number']
         if_preprocess = config_info.PRE_PROCESS['switch']
         standard_testsets = pd.read_csv(config_info.EVALUATION['csv_path'])
+
+        csv_bbox = result_df.copy()
+        csv_bbox.loc[csv_bbox['class'] == 'shixiao', 'class'] = 'yinlie'
         dtype_ratio = {}
         total_missover = None
-        for select_defect in defect_types:
+        for select_defect in all_defect_types:
             defect_th, total_missover = select_defect_thresh(select_defect, config_info.types_and_ratios,
                                                              standard_testsets, csv_bbox, step,
                                                              miss_num, overkill_num, if_preprocess)
@@ -302,22 +311,6 @@ def module_evaluation(config_info, ground_truth, csv_bbox):
         plt.plot(total_missover['defect_th'].values, total_missover['miss_num'].values, label='miss_num')
         plt.plot(total_missover['defect_th'].values, total_missover['overkill_num'].values, label='overkill_num')
         plt.plot(total_missover['defect_th'].values, total_missover['ng_num'].values, label='ng_num')
-        line_threshold = os.path.join(config_info.OUTPUT_FOLDER, 'pics', "line_threshold.jpg")
-        plt.savefig(line_threshold)
+        plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "line_threshold.jpg"))
 
-    else:
-        for names, defects in ground_truth.items():
-            pic_list.append(names)
-            for d in defects:
-                d_type = d.split("_")[0]
-                if d_type in defect_types:
-                    if d_type in info.keys():
-                        info[d_type] += 1
-                    else:
-                        info[d_type] = 1
-
-    # 答案中总组件个数
-    print(len(info))
-    # 答案中各个缺陷的个数
-    for i in defect_types:
-        print(info[i])
+    return module_str
