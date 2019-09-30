@@ -77,6 +77,23 @@ def module_config_info(config_info):
     return module_str
 
 
+def add_defect_2_info(defect, defect_types, info, score):
+    """
+
+    :param defect:
+    :param defect_types:
+    :param info:
+    :param score:
+    :return:
+    """
+    score = float(score)
+    if defect in defect_types:
+        if defect in info.keys():
+            info[defect].append(score)
+        else:
+            info[defect] = [score]
+
+
 def module_results_info(config_info, alg_results):
     """
     第三部分：
@@ -87,79 +104,92 @@ def module_results_info(config_info, alg_results):
     :param config_info:
     :return:
     """
-    # 缺陷类型
-    defect_types = config_info.types_and_ratios.keys()
 
-    d_info = {}
-    # 绘制缺陷分布热力图
-    if config_info.PRE_PROCESS['switch']:
+    # 缺陷类型
+    all_defect_types = config_info.types_and_ratios.keys()
+
+    needed_info = {}
+    if config_info.PRE_PROCESS['switch']:  # 有前处理
+        # 共检测了多少张图片
+        img_num = len(os.listdir(config_info.PRE_PROCESS['origin_folder']))
+
         r = config_info.PRE_PROCESS['size']['rows']
         c = config_info.PRE_PROCESS['size']['cols']
         loc_matrix = np.zeros((r, c))  # 用于绘制热力图
         for _, defects in alg_results.items():
-            for d in defects:
-                d_type, _, _, _, _, score, row, col = d.split("_")
-                loc_matrix[row, col] += 1
-                if d_type in defect_types:
-                    if d_type in d_info.keys():
-                        d_info[d_type].append(score)
-                    else:
-                        d_info[d_type] = [score]
-    else:
+            for i in defects:
+                d, _, _, _, _, score, row, col = i.split("_")
+                loc_matrix[int(row) - 1, int(col) - 1] += 1
+                add_defect_2_info(d, all_defect_types, needed_info, score)
+    else:  # 无前处理
+        # 共检测了多少张图片
+        img_num = len(os.listdir(config_info.IMG_CUT_FOLDER))
+
         loc_matrix = np.zeros((600, 600))  # 用于绘制热力图
         for _, defects in alg_results.items():
-            for d in defects:
-                d_type, x1, x2, y1, y2, score = d.split("_")
-                loc_matrix[y1:y2, x1:x2] += 1
-                if d_type in defect_types:
-                    if d_type in d_info.keys():
-                        d_info[d_type].append(score)
-                    else:
-                        d_info[d_type] = [score]
+            for i in defects:
+                d, x1, x2, y1, y2, score = i.split("_")
+                loc_matrix[int(y1):int(y2), int(x1):int(x2)] += 1
+                add_defect_2_info(d, all_defect_types, needed_info, score)
+
+    # 检测到的缺陷类型
+    detected_types = needed_info.keys()
 
     # 绘制饼图
     plt.figure(figsize=(6, 6))
     values = []
     labels = []
-    for i in defect_types:
-        values.append(len(d_info[i]))
+    for i in detected_types:
+        values.append(len(needed_info[i]))
         labels.append(i)
     plt.pie(values, labels=labels, labeldistance=1.1, autopct='%2.0f%%', startangle=90, pctdistance=0.7)
-    defects_ratio = os.path.join(config_info.OUTPUT_FOLDER, 'pics', "defects_ratio.jpg")
-    plt.savefig(defects_ratio)
+    plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "defects_ratio.jpg"))
 
     # 绘制置信度直方图
-    for i in defect_types:
+    for i in detected_types:
         plt.figure(figsize=(6, 6))
-        sns.distplot(d_info[i])
+        sns.distplot(needed_info[i])
         plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "hist_{}.jpg".format(i)))
 
     # 绘制热力图
     plt.figure(figsize=(6, 6))
     sns.heatmap(loc_matrix, linewidths=0.05, vmax=math.ceil(np.max(loc_matrix) / 10) * 10, vmin=0, cmap='rainbow')
-    heatmap_alg_results = os.path.join(config_info.OUTPUT_FOLDER, 'pics', "heatmap_alg_results.jpg")
-    plt.savefig(heatmap_alg_results)
+    plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "heatmap_alg_results.jpg"))
 
+    # --------------------
     # markdown字符串
     module_str = """
 # 三、测试结果统计
 
+共输入**{}**张测试图片
+检测出**{}**张图片有缺陷
+
 1. 测试缺陷分布
+    
+    |缺陷名称|检测个数|
+    | --- | --- |""".format(img_num, len(alg_results))
+
+    for i in detected_types:
+        module_str += """
+    |{}|{}|""".format(i, len(needed_info[i]))
+
+    module_str += """
+    
     ![]({})
 
 2. 置信度区间分布
-    """.format(defects_ratio)
+    """.format(os.path.join('pics', "defects_ratio.jpg"))
 
-    for i in defect_types:
+    for i in detected_types:
         module_str += """
-    ![]({})
-        """.format(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "hist_{}.jpg".format(i)))
+    ![]({})""".format(os.path.join('pics', "hist_{}.jpg".format(i)))
 
-    module_str += """<br>
+    module_str += """
+
 3. 测试结果缺陷分布热力图
     ![]({})
-    <br>
-    """.format(heatmap_alg_results)
+<br>
+    """.format(os.path.join('pics', "heatmap_alg_results.jpg"))
 
     return module_str
 
@@ -240,7 +270,7 @@ def module_evaluation(config_info, ground_truth, csv_bbox):
         for names, defects in ground_truth.items():
             for d in defects:
                 d_type, row, col = d.split("_")
-                loc_matrix[row, col] += 1
+                loc_matrix[int(row), int(col)] += 1
                 pic_list.append("-".join([names, row, col]))
                 if d_type in defect_types:
                     if d_type in info.keys():
@@ -291,4 +321,3 @@ def module_evaluation(config_info, ground_truth, csv_bbox):
     # 答案中各个缺陷的个数
     for i in defect_types:
         print(info[i])
-

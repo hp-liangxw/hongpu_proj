@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -8,8 +7,6 @@ import cv2
 import glob
 import sys
 
-reload(sys)
-sys.setdefaultencoding('utf-8')
 import yaml
 import shutil
 import logging
@@ -20,8 +17,21 @@ from src.yinlie_post_process import yinlie_xizhi
 from src.auto_labeling import csv2xml
 from output_md import *
 
-sys.path.append('/detectron/tools')
-from infer_simple import infer_simple
+from predictor import infer_simple
+
+logger = logging.getLogger('mylogger')
+logger.setLevel(logging.INFO)
+
+rf_handler = logging.StreamHandler(sys.stderr)  # 默认是sys.stderr
+rf_handler.setLevel(logging.INFO)
+rf_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(message)s"))
+
+f_handler = logging.FileHandler('test.log')
+f_handler.setLevel(logging.INFO)
+f_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(message)s"))
+
+logger.addHandler(rf_handler)
+logger.addHandler(f_handler)
 
 
 class Config:
@@ -51,7 +61,7 @@ class Config:
         :return:
         """
         if not os.path.exists(self.config_path):
-            logging.info("the configuration file: {} is not exists!".format(self.config_path))
+            logger.info("the configuration file: {} is not exists!".format(self.config_path))
             return 1
 
         # 读取配置文件
@@ -72,31 +82,31 @@ class Config:
             self.AUTO_LABELING = cfg_info['auto_labeling']
             self.EVALUATION = cfg_info['evaluation']
         except:
-            print("failed to read configuration file")
+            logger.info("failed to read configuration file")
             return 1
 
         # 有前处理时，前处理文件夹是否存在
         if self.PRE_PROCESS['switch'] is True:
             if not os.path.exists(self.PRE_PROCESS['origin_folder']):
-                print("path: {} not exists!".format(self.PRE_PROCESS['origin_folder']))
+                logger.info("path: {} not exists!".format(self.PRE_PROCESS['origin_folder']))
                 return 1
 
         # 图片输入路径是否存在
         if not os.path.exists(self.IMG_CUT_FOLDER):
-            print("path: {} not exists!".format(self.IMG_CUT_FOLDER))
+            logger.info("path: {} not exists!".format(self.IMG_CUT_FOLDER))
             return 1
 
         # 模型路径是否存在
         self.types_and_ratios, self.model_paths = self.get_defect_info()
         for i in self.model_paths.values():
             if not os.path.exists(i):
-                print("path: {} not exists!".format(i))
+                logger.info("path: {} not exists!".format(i))
                 return 1
 
         # 答案是否存在
         if self.EVALUATION['switch'] is True:
             if not os.path.exists(self.EVALUATION['csv_path']):
-                print("path: {} not exists!".format(self.EVALUATION['csv_path']))
+                logger.info("path: {} not exists!".format(self.EVALUATION['csv_path']))
                 return 1
 
         # 创建输出文件夹
@@ -109,14 +119,14 @@ class Config:
         os.makedirs(os.path.join(self.OUTPUT_FOLDER, 'pics'))
 
         # 再次查看配置信息正确性
-        print("\n\n>>>>>>>>----------------------------------------------------------------<<<<<<<<\n")
-        print(self.yml_str)
-        print("\n>>>>>>>>----------------------------------------------------------------<<<<<<<<\n\n")
+        logger.info("\n\n>>>>>>>>----------------------------------------------------------------<<<<<<<<\n")
+        logger.info(self.yml_str)
+        logger.info("\n>>>>>>>>----------------------------------------------------------------<<<<<<<<\n\n")
 
-        answer = raw_input("Is the configuration file correct? [yes/no]:")
+        answer = input("Is the configuration file correct? [yes/no]:")
         while answer.upper() not in ["YES", "Y", "NO", "N"]:
-            print("Please input yes or no!")
-            answer = raw_input()
+            logger.info("Please input yes or no!")
+            answer = input()
 
         if answer.upper() in ["YES", "Y"]:
             return 0
@@ -145,13 +155,13 @@ class Config:
         若需要前处理，则输出切图时的行列信息
         :return:
         """
-        logging.info('!!!getting pic information')
+        logger.info('!!!getting pic information')
 
         pic_info = {}
         line_dict = {}
 
         if self.PRE_PROCESS['switch']:
-            logging.info('!!!start pre_process')
+            logger.info('!!!start pre_process')
 
             # 如果存在小图文件夹，先删除再新建
             if os.path.exists(self.IMG_CUT_FOLDER):
@@ -169,14 +179,13 @@ class Config:
                     line_dict[img_name] = (row_lines, col_lines)
                     for i in range(len(row_lines) - 1):
                         for j in range(len(col_lines) - 1):
-                            cv2.imwrite(
-                                os.path.join(self.IMG_CUT_FOLDER, "-".join([img_name, str(i), str(j)]) + '.jpg'),
-                                cut_images[row_lines[i], col_lines[j]])
+                            name = "-".join([img_name, str(i + 1), str(j + 1)]) + '.jpg'
+                            cv2.imwrite(os.path.join(self.IMG_CUT_FOLDER, name), cut_images[row_lines[i], col_lines[j]])
                 except:
                     pass
 
-            print('===========================================================')
-            print('!!!finish pre_process')
+            logger.info('===========================================================')
+            logger.info('!!!finish pre_process')
         else:
             for img in glob.glob(os.path.join(self.IMG_CUT_FOLDER, '*.jpg')):
                 img_name = os.path.basename(img).split('.')[0]
@@ -199,9 +208,9 @@ def model_predict(config_info):
     for model_key, model_values in MODEL.items():
         model_dir = model_values['model_dir']
         threshold = model_values['threshold']
-        infer_simple(INPUT_FOLDER, os.path.join(OUTPUT_FOLDER, 'csv'), model_dir, threshold)
-    logging.info('===========================================================')
-    logging.info('!!!finish model predict')
+        infer_simple(INPUT_FOLDER, os.path.join(OUTPUT_FOLDER, 'csv'), model_dir, threshold, logger)
+    logger.info('===========================================================')
+    logger.info('!!!finish model predict')
 
 
 def merge_csv_files(config_info, line_dict):
@@ -232,8 +241,8 @@ def merge_csv_files(config_info, line_dict):
         csv_total['row'] = [int(name.split('-')[1]) for name in csv_total['pic_name']]
         csv_total['col'] = [int(name.split('-')[2]) for name in csv_total['pic_name']]
         for i in range(len(csv_total)):
-            x_append = line_dict[csv_total.loc[i, 'big_pic']][1][csv_total.loc[i, 'col']]
-            y_append = line_dict[csv_total.loc[i, 'big_pic']][0][csv_total.loc[i, 'row']]
+            x_append = line_dict[csv_total.loc[i, 'big_pic']][1][csv_total.loc[i, 'col'] - 1]
+            y_append = line_dict[csv_total.loc[i, 'big_pic']][0][csv_total.loc[i, 'row'] - 1]
             csv_total.loc[i, 'bigxmin'] = x_append + csv_total.loc[i, 'xmin']
             csv_total.loc[i, 'bigxmax'] = x_append + csv_total.loc[i, 'xmax']
             csv_total.loc[i, 'bigymin'] = y_append + csv_total.loc[i, 'ymin']
@@ -243,8 +252,8 @@ def merge_csv_files(config_info, line_dict):
         csv_total['bigxmax'] = csv_total['bigxmax'].astype('int')
         csv_total['bigymax'] = csv_total['bigymax'].astype('int')
 
-    logging.info('===========================================================')
-    logging.info('!!!merge bbox output')
+    logger.info('===========================================================')
+    logger.info('!!!merge bbox output')
 
     csv_total['post_status'] = True
     # post process
@@ -256,8 +265,8 @@ def merge_csv_files(config_info, line_dict):
             post_status = yinlie_xizhi(img_post, PRE_PROCESS['size']['rows'], PRE_PROCESS['size']['cols'], bbox,
                                        yinlie_xizhi_thresh=2.5)
             csv_total.loc[i, 'post_status'] = post_status
-        logging.info('===========================================================')
-        logging.info('!!!finish post process')
+        logger.info('===========================================================')
+        logger.info('!!!finish post process')
 
     csv_total.to_csv(os.path.join(OUTPUT_FOLDER, 'csv', 'output_total.csv'), index=False)
 
@@ -286,8 +295,8 @@ def auto_labeling(config_info, pic_shape, csv_total):
         xml_bbox = filter_bbox.loc[:, ['pic_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class']]
     xml_bbox.columns = ['pic_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class']
     csv2xml(xml_bbox, os.path.join(OUTPUT_FOLDER, 'xml'), pic_shape)
-    logging.info('===========================================================')
-    logging.info('!!!finish auto labeling')
+    logger.info('===========================================================')
+    logger.info('!!!finish auto labeling')
 
 
 def get_output_defect_info(result_df, defect_types, pre_process):
@@ -377,18 +386,17 @@ def draw_bbox_no_answer(img_path, save_path, result_loc):
     """
     font = cv2.FONT_HERSHEY_SIMPLEX
     for name, type_loc in result_loc.items():
-        # print(name, type_loc)
+
         pic_file = os.path.join(img_path, name + ".jpg")
         if os.path.exists(pic_file):
             img_data = cv2.imread(pic_file)
 
             for i in type_loc:
-                splited_str = i.split("_")
-                defect_type, x1, x2, y1, y2, score = splited_str[:6]
+                defect_type, x1, x2, y1, y2, score = i.split("_")[:6]
 
                 x1, x2, y1, y2 = int(x1), int(x2), int(y1), int(y2)
-                cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (255, 0, 0), 3)
-                cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (255, 0, 0), 3)
+                cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 0), 3)
+                cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 0), 3)
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
 
@@ -560,7 +568,6 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
 def main():
     """
     main function
-    :param config_path: 配置文件路径
     :return:
     """
     # --------------------------------------------------------
@@ -571,7 +578,7 @@ def main():
     config_path = r"config/config.yml"
     cfgs = Config(config_path)
     if cfgs.is_valid:
-        print("Please modify the configuration file!")
+        logger.info("Please modify the configuration file!")
         exit(0)
 
     # --------------------------------------------------------
@@ -634,7 +641,8 @@ def main():
             draw_bbox_with_answer_with_pre(img_folder, save_folder, result_loc, gold_loc, line_dict)
 
     # 五、报告输出
-    csv_bbox = result_df.loc[:, ['pic_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class', 'score', 'post_status', 'row', 'col']].copy()
+    csv_bbox = result_df.loc[:,
+               ['pic_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class', 'score', 'post_status', 'row', 'col']].copy()
     csv_bbox.loc[:, 'row'] = csv_bbox.loc[:, 'row'] + 1
     csv_bbox.loc[:, 'col'] = csv_bbox.loc[:, 'col'] + 1
     csv_bbox.loc[csv_bbox['class'] == 'shixiao', 'class'] = 'yinlie'
@@ -649,8 +657,8 @@ def main():
         if cfgs.EVALUATION['switch']:
             pass
 
-    logging.info('===========================================================')
-    logging.info('!!!finish write md file')
+    logger.info('===========================================================')
+    logger.info('!!!finish write md file')
 
 
 if __name__ == "__main__":
