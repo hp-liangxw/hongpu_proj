@@ -46,9 +46,10 @@ def basic_info(config_info):
     # # 模型路径与缺陷类型
     model_strs = ""
     for i in config_info.model_infos.values():
-        model_strs = i["model_dir"]
+        model_strs += i["model_dir"]
         for d_name, thr in i['threshold'].items():
             model_strs += "<br>" + d_name + ": " + str(thr)
+        model_strs += "<br>"
     # # 预处理信息
     pre_strs = ""
     if config_info.PRE_PROCESS["switch"]:
@@ -81,26 +82,9 @@ def basic_info(config_info):
     return module_str
 
 
-def add_defect_2_info(defect, defect_types, info, score):
-    """
-
-    :param defect:
-    :param defect_types:
-    :param info:
-    :param score:
-    :return:
-    """
-    score = float(score)
-    if defect in defect_types:
-        if defect in info.keys():
-            info[defect].append(score)
-        else:
-            info[defect] = [score]
-
-
 def module_results_info(config_info, inner, outer, scores, loc_matrix):
     """
-    第二部分：
+    第二部分 测试结果信息：
     1. 一共检测出多少缺陷，每种缺陷的占比，绘制饼图
     2. 每种缺陷的置信度分布直方图
     3. 缺陷分布热力图
@@ -129,7 +113,7 @@ def module_results_info(config_info, inner, outer, scores, loc_matrix):
                 each_defect_num[rei] = outer[i]
     detected_types = set(detected_types)
 
-    # 1. 绘制饼图
+    # 1. 饼图
     fig = plt.figure(figsize=(6, 6))
     gs = GridSpec(1, 6, figure=fig)
     ax1 = fig.add_subplot(gs[0, :-1])
@@ -150,12 +134,14 @@ def module_results_info(config_info, inner, outer, scores, loc_matrix):
         inner_label.append(inner['none'])
         inner_color.append(11)
         outer_val.append(inner['none'])
-        outer_label.append('none')
+        outer_label.append('')
         outer_color.append(19)
 
     # 各个缺陷的颜色映射表
     color_map = {}
     for ind, i in enumerate(detected_types):
+        if ind >= 2:  # 2为内图的颜色
+            ind = ind + 1
         color_map[i] = ind
 
     for i in detected_types:
@@ -179,12 +165,30 @@ def module_results_info(config_info, inner, outer, scores, loc_matrix):
         inner_label.append(inner["multi"])
         inner_color.append(11)
 
+    # 开始绘制
     ax1.pie(outer_val, labels=outer_label, colors=cmap1(outer_color), labeldistance=0.75, radius=1,
             wedgeprops=dict(edgecolor='w'))
-    ax1.pie(inner_val, labels=inner_label, colors=cmap2(inner_color), labeldistance=0.6, radius=0.66,
+    ax1.pie(inner_val, labels=inner_label, colors=cmap2(inner_color), labeldistance=0.66, radius=0.66,
             wedgeprops=dict(edgecolor='w'))
     ax1.pie([1], radius=0.33, colors='w')
-
+    # 绘制colorbar
+    # 第一个0.5参数表示垂直高度，第二个和第三个参数0.7、0.9表示色块的长度。参照系是xlim和ylim的长度。
+    ax2.hlines(0.5, 0.7, 0.9, color=cmap2(11), linewidth=12)
+    ax2.text(0.95, 0.5, "input", fontsize=10)
+    ct = 1
+    for i in color_map:
+        ax2.hlines(0.5 - 0.05 * ct, 0.7, 0.9, colors=cmap1(color_map[i]), linewidth=12)
+        ax2.text(0.95, 0.5 - 0.05 * ct, i, fontsize=10)
+        ct += 1
+    if 19 in outer_color:
+        ax2.hlines(0.5 - 0.05 * ct, 0.7, 0.9, colors=cmap1(19), linewidth=12)
+        ax2.text(0.95, 0.5 - 0.05 * ct, "none", fontsize=10)
+        ct += 1
+    ax2.yaxis.set_visible(False)
+    ax2.xaxis.set_visible(False)
+    ax2.set_axis_off()
+    ax2.set_xlim([0.7, 1])
+    ax2.set_ylim([0, 1 - (ct + 1 - 2) * 0.05])
     plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "defects_ratio.jpg"))
 
     # 2. 绘制置信度直方图
@@ -195,8 +199,11 @@ def module_results_info(config_info, inner, outer, scores, loc_matrix):
 
     # 3. 绘制热力图
     [r, c] = loc_matrix.shape
-    plt.figure(figsize=(r / 100, c / 100))
+    plt.figure(figsize=(c / 100, r / 100))
     plt.pcolor(loc_matrix, cmap=plt.cm.Reds)
+    plt.xticks([])
+    plt.yticks([])
+    # plt.grid("True")
     plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "heatmap_alg_results.jpg"))
 
     # --------------------
@@ -204,7 +211,7 @@ def module_results_info(config_info, inner, outer, scores, loc_matrix):
     module_str = """
 ## 二、测试结果统计
 
-共输入**{}**张测试图片
+共输入**{}**张测试图片<br>
 检测出**{}**张图片有缺陷
 
 1. 测试缺陷分布

@@ -597,6 +597,55 @@ def add_defect_2_info(defect, defect_types, info, score):
             info[defect] = [score]
 
 
+def plots_parameters(config_info, result_loc, all_defect_types, pic_shape):
+    # 用于绘制双层饼图
+    inners = {"none": 0, "multi": 0}  # 内圈表示输入的图片的数量
+    outers = {}  # 外圈表示检测到的缺陷的数量
+    scores = {}  # 用于绘制置信度直方图
+    for d in all_defect_types:
+        inners[d] = 0
+        outers[d] = 0
+        outers["multi_" + d] = 0
+        scores[d] = []
+    inners["none"] = len(pic_shape) - len(result_loc)
+
+    # 用于绘制热力图
+    rr = config_info.PRE_PROCESS['size']['rows']
+    cc = config_info.PRE_PROCESS['size']['cols']
+    if not config_info.PRE_PROCESS['switch']:
+        height, width = rr * 100, rr * 100
+    else:
+        height, width = rr * 100, cc * 100
+    loc_matrix = np.zeros((height, width))
+
+    # 有缺陷的图片
+    for k, v in result_loc.items():
+        clses = []
+        for p in v:
+            _d, _x1, _x2, _y1, _y2, _s = p.split("_")[:6]
+            _x1, _x2, _y1, _y2, _s = int(_x1), int(_x2), int(_y1), int(_y2), float(_s)
+            clses.append(_d)  # 当前图片中检测到的所有的缺陷类型
+            scores[_d].append(_s)  # 添加置信度
+            # 长宽归一化
+            _x1 = int(_x1 * (width / pic_shape[k][1]))
+            _x2 = int(_x2 * (width / pic_shape[k][1]))
+            _y1 = int(_y1 * (height / pic_shape[k][0]))
+            _y2 = int(_y2 * (height / pic_shape[k][0]))
+            loc_matrix[height - _y2:height - _y1, _x1:_x2] += 1
+
+        # 当前图片只检测到1种缺陷
+        if len(set(clses)) == 1:
+            inners[clses[0]] += 1
+            outers[clses[0]] += len(clses)
+        # 当前图片检测到多种缺陷
+        else:
+            inners["multi"] += 1
+            for p in set(clses):
+                outers["multi_" + p] += clses.count(p)
+
+    return inners, outers, scores, loc_matrix
+
+
 def main():
     """
     main function
@@ -644,24 +693,10 @@ def main():
     save_folder = os.path.join(cfgs.OUTPUT_FOLDER, "img_with_box")
 
     # 开始画图
-    gold_info = None
-    test_pics = pic_shape.keys()
-
     md_path = os.path.join(cfgs.OUTPUT_FOLDER, 'summary.md')  # markdown文件路径
     f_md = open(md_path, "w")
     f_md.write(report_title())
     f_md.write(basic_info(cfgs))
-
-    # 双层饼图
-    inner_n = {"none": 0, "multi": 0}  # 内圈表示输入的图片的数量，
-    outer_n = {}  # 外圈表示检测到的缺陷的数量
-    # 用于绘制置信度直方图
-    scores = {}
-    for d in all_defect_types:
-        inner_n[d] = 0
-        outer_n[d] = 0
-        outer_n["multi_" + d] = 0
-        scores[d] = []
 
     # 4.1 无答案
     if not cfgs.EVALUATION['switch']:
@@ -669,73 +704,15 @@ def main():
         if not cfgs.PRE_PROCESS['switch']:
             img_folder = cfgs.IMG_CUT_FOLDER
             result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=False)
-
-            # 用于绘制热力图
-            loc_matrix = np.zeros((600, 600))
-            inner_n["none"] = len(pic_shape) - len(result_loc)
-            # 有缺陷的图片
-            for k, v in result_loc.items():
-                clses = []
-                for p in v:
-                    _d, _x1, _x2, _y1, _y2, _s = p.split("_")[:6]
-                    _x1, _x2, _y1, _y2, _s = int(_x1), int(_x2), int(_y1), int(_y2), float(_s)
-                    clses.append(_d)  # 当前图片中检测到的所有的缺陷类型
-                    scores[_d].append(_s)  # 添加置信度
-                    _x1 = _x1 * (600. / pic_shape[k][1])
-                    _x2 = _x2 * (600. / pic_shape[k][1])
-                    _y1 = _y1 * (600. / pic_shape[k][0])
-                    _y2 = _y2 * (600. / pic_shape[k][0])
-                    loc_matrix[int(_y1):int(_y2), int(_x1):int(_x2)] += 1
-
-                # 当前图片只检测到1种缺陷
-                if len(set(clses)) == 1:
-                    inner_n[clses[0]] += 1
-                    outer_n[clses[0]] += len(clses)
-                # 当前图片检测到多种缺陷
-                else:
-                    inner_n["multi"] += 1
-                    for p in set(clses):
-                        outer_n["multi_" + p] += clses.count(p)
-
         # 4.1.2 有前处理
         else:
             img_folder = cfgs.PRE_PROCESS['origin_folder']
             result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=True)
 
-            # 用于绘制热力图
-            rr = cfgs.PRE_PROCESS['size']['rows']
-            cc = cfgs.PRE_PROCESS['size']['cols']
-            loc_matrix = np.zeros((rr * 100, cc * 100))
-            inner_n["none"] = len(pic_shape) - len(result_loc)
-
-            # 有缺陷的图片
-            for k, v in result_loc.items():
-                clses = []
-                for p in v:
-                    _d, _x1, _x2, _y1, _y2, _s = p.split("_")[:6]
-                    _x1, _x2, _y1, _y2, _s = int(_x1), int(_x2), int(_y1), int(_y2), float(_s)
-                    clses.append(_d)  # 当前图片中检测到的所有的缺陷类型
-                    scores[_d].append(_s)  # 添加置信度
-                    _x1 = _x1 * (cc * 100 / pic_shape[k][1])
-                    _x2 = _x2 * (cc * 100 / pic_shape[k][1])
-                    _y1 = _y1 * (rr * 100 / pic_shape[k][0])
-                    _y2 = _y2 * (cc * 100 / pic_shape[k][0])
-                    loc_matrix[int(_y1):int(_y2), int(_x1):int(_x2)] += 1
-
-                # 当前图片只检测到1种缺陷
-                if set(clses) == 1:
-                    inner_n[clses[0]] += 1
-                    outer_n[clses[0]] += 1
-                # 当前图片检测到多种缺陷
-                else:
-                    inner_n["multi"] += 1
-                    for p in set(clses):
-                        outer_n["multi_" + p] += clses.count(p)
-        print(inner_n)
-        print(outer_n)
         # draw bbox
         draw_bbox_normal(img_folder, save_folder, result_loc)
         # 输出md文件
+        inner_n, outer_n, scores, loc_matrix = plots_parameters(cfgs, result_loc, all_defect_types, pic_shape)
         f_md.write(module_results_info(cfgs, inner_n, outer_n, scores, loc_matrix))
         f_md.close()
     # 4.2 有答案
