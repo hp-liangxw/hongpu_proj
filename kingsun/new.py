@@ -20,6 +20,9 @@ tic = time.time()
 color = cv2.imread(r"D:\OneDrive\MyDrive\OneDrive\_Proj_code\hongpu_proj\kingsun\new.jpg")
 gray = cv2.imread(r"D:\OneDrive\MyDrive\OneDrive\_Proj_code\hongpu_proj\kingsun\new.jpg", 0)
 
+print(color.shape)
+print(gray.shape)
+
 # step 1
 hsv = cv2.cvtColor(color, cv2.COLOR_BGR2HSV)
 color[hsv[:, :, 0] < 60] = 255

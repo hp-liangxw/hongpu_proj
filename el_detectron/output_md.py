@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 import os
 import datetime
-import math
 import seaborn as sns
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
 
 
-def title_str():
+def report_title():
     """
     大标题
     :return:
@@ -20,18 +20,21 @@ def title_str():
     return title
 
 
-def module_basic_info(config_info):
+def basic_info(config_info):
     """
     第一部分：基本信息
+    包括测试版本以及测试配置
     :param config_info:
     :return:
     """
     author = config_info.INFO["author"]
     report_version = config_info.INFO["report_version"]
 
-    # markdown字符串
+    # (1) 版本信息
     module_str = """
-|一、基本信息||
+## 一、基本信息
+
+|版本信息||
 | ---- | ---- |
 |测试人|{}|
 |测试时间|{}|
@@ -39,35 +42,36 @@ def module_basic_info(config_info):
 <br>
     """.format(author, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), report_version)
 
-    return module_str
+    # (2) 测试配置信息
+    # # 模型路径与缺陷类型
+    model_strs = ""
+    for i in config_info.model_infos.values():
+        model_strs = i["model_dir"]
+        for d_name, thr in i['threshold'].items():
+            model_strs += "<br>" + d_name + ": " + str(thr)
+    # # 预处理信息
+    pre_strs = ""
+    if config_info.PRE_PROCESS["switch"]:
+        for i, j in config_info.PRE_PROCESS["size"].items():
+            pre_strs += i + ": " + str(j) + " "
+    else:
+        pre_strs = "/"
 
-
-def module_config_info(config_info):
-    """
-    第二部分：测试配置信息
-    :param config_info:
-    :return:
-    """
-    temp = []
-    for t, r in config_info.types_and_ratios.items():
-        temp.append(t + ": " + str(r))
-
-    # markdown字符串
-    module_str = """
-|二、测试配置||
+    module_str += """
+|测试配置||
 | ---- | ---- |
-|是否前处理|{}|
-|缺陷类型|{}|
-|模型路径|{}|
-|自动标签|{}|
-|后处理|{}|
-|评估|{}|
-|答案|{}|
+|是否预处理|{}|
+|预处理参数|{}|
+|模型与缺陷|{}|
+|自动打标签|{}|
+|是否后处理|{}|
+|是否评估|{}|
+|是否有答案|{}|
 <br>
     """.format(
         config_info.PRE_PROCESS["switch"],
-        "<br>".join(temp),
-        "<br>".join(config_info.model_paths.values()),
+        pre_strs,
+        model_strs,
         config_info.AUTO_LABELING["switch"],
         config_info.POST_PROCESS["switch"],
         config_info.EVALUATION["switch"],
@@ -94,87 +98,126 @@ def add_defect_2_info(defect, defect_types, info, score):
             info[defect] = [score]
 
 
-def module_results_info(config_info, alg_results):
+def module_results_info(config_info, inner, outer, scores, loc_matrix):
     """
-    第三部分：
+    第二部分：
     1. 一共检测出多少缺陷，每种缺陷的占比，绘制饼图
     2. 每种缺陷的置信度分布直方图
     3. 缺陷分布热力图
-    :param alg_results:
     :param config_info:
+    :param inner:
+    :param outer:
+    :param scores:
+    :param loc_matrix:
     :return:
     """
     # 所有缺陷类型
-    all_defect_types = config_info.types_and_ratios.keys()
-
-    res_info = {}
-    if config_info.PRE_PROCESS['switch']:  # 有前处理
-        # 共检测了多少张图片
-        img_num = len(os.listdir(config_info.PRE_PROCESS['origin_folder']))
-
-        r = config_info.PRE_PROCESS['size']['rows']
-        c = config_info.PRE_PROCESS['size']['cols']
-        loc_matrix = np.zeros((r, c))  # 用于绘制热力图
-        for _, defects in alg_results.items():
-            for i in defects:
-                d, _, _, _, _, score, row, col = i.split("_")
-                loc_matrix[int(row) - 1, int(col) - 1] += 1
-                add_defect_2_info(d, all_defect_types, res_info, score)
-    else:  # 无前处理
-        # 共检测了多少张图片
-        img_num = len(os.listdir(config_info.IMG_CUT_FOLDER))
-
-        loc_matrix = np.zeros((600, 600))  # 用于绘制热力图
-        for _, defects in alg_results.items():
-            for i in defects:
-                d, x1, x2, y1, y2, score = i.split("_")
-                print()
-                loc_matrix[int(y1):int(y2), int(x1):int(x2)] += 1
-                add_defect_2_info(d, all_defect_types, res_info, score)
+    all_defect_types = []
+    for i in config_info.model_infos.values():
+        all_defect_types.extend(i['threshold'].keys())
 
     # 检测到的缺陷类型
-    detected_types = res_info.keys()
+    detected_types = []
+    each_defect_num = {}
+    for i in outer:
+        if outer[i] > 0:
+            rei = i.replace("multi_", "")
+            detected_types.append(rei)
+            if rei in each_defect_num.keys():
+                each_defect_num[rei] += outer[i]
+            else:
+                each_defect_num[rei] = outer[i]
+    detected_types = set(detected_types)
 
-    # 绘制饼图
-    plt.figure(figsize=(6, 6))
-    values = []
-    labels = []
+    # 1. 绘制饼图
+    fig = plt.figure(figsize=(6, 6))
+    gs = GridSpec(1, 6, figure=fig)
+    ax1 = fig.add_subplot(gs[0, :-1])
+    ax2 = fig.add_subplot(gs[0, -1])
+    cmap1 = plt.get_cmap("Pastel1")
+    cmap2 = plt.get_cmap("tab20c")
+
+    # 绘制饼图的val，label，color
+    outer_val = []
+    outer_label = []
+    outer_color = []
+    inner_val = []
+    inner_label = []
+    inner_color = []
+
+    if inner['none'] > 0:
+        inner_val.append(inner['none'])
+        inner_label.append(inner['none'])
+        inner_color.append(11)
+        outer_val.append(inner['none'])
+        outer_label.append('none')
+        outer_color.append(19)
+
+    # 各个缺陷的颜色映射表
+    color_map = {}
+    for ind, i in enumerate(detected_types):
+        color_map[i] = ind
+
     for i in detected_types:
-        values.append(len(res_info[i]))
-        labels.append(i)
-    plt.pie(values, labels=labels, labeldistance=1.1, autopct='%2.0f%%', startangle=90, pctdistance=0.7)
+        if inner[i] > 0:
+            inner_val.append(inner[i])
+            inner_label.append(inner[i])
+            inner_color.append(11)
+            outer_val.append(inner[i])
+            outer_label.append(i + ":" + str(outer[i]))
+            outer_color.append(color_map[i])
+
+    if inner["multi"] > 0:
+        n = 0
+        for i in detected_types:
+            if outer["multi_" + i] > 0:
+                outer_val.append(outer["multi_" + i])
+                outer_label.append(outer["multi_" + i])
+                outer_color.append(color_map[i])
+                n += outer["multi_" + i]
+        inner_val.append(n)
+        inner_label.append(inner["multi"])
+        inner_color.append(11)
+
+    ax1.pie(outer_val, labels=outer_label, colors=cmap1(outer_color), labeldistance=0.75, radius=1,
+            wedgeprops=dict(edgecolor='w'))
+    ax1.pie(inner_val, labels=inner_label, colors=cmap2(inner_color), labeldistance=0.6, radius=0.66,
+            wedgeprops=dict(edgecolor='w'))
+    ax1.pie([1], radius=0.33, colors='w')
+
     plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "defects_ratio.jpg"))
 
-    # 绘制置信度直方图
+    # 2. 绘制置信度直方图
     for i in detected_types:
         plt.figure(figsize=(6, 6))
-        sns.distplot(res_info[i])
+        sns.distplot(scores[i])
         plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "hist_{}.jpg".format(i)))
 
-    # 绘制热力图
-    plt.figure(figsize=(6, 6))
+    # 3. 绘制热力图
+    [r, c] = loc_matrix.shape
+    plt.figure(figsize=(r / 100, c / 100))
     plt.pcolor(loc_matrix, cmap=plt.cm.Reds)
     plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "heatmap_alg_results.jpg"))
 
     # --------------------
     # markdown字符串
     module_str = """
-# 三、测试结果统计
+## 二、测试结果统计
 
 共输入**{}**张测试图片
 检测出**{}**张图片有缺陷
 
 1. 测试缺陷分布
-    
+
     |缺陷名称|检测个数|
-    | --- | --- |""".format(img_num, len(alg_results))
+    | --- | --- |""".format(sum(inner.values()), sum(inner.values()) - inner['none'])
 
     for i in detected_types:
         module_str += """
-    |{}|{}|""".format(i, len(res_info[i]))
+    |{}|{}|""".format(i, each_defect_num[i])
 
     module_str += """
-    
+
     ![]({})
 
 2. 置信度区间分布
@@ -272,7 +315,7 @@ def module_evaluation(config_info, gt_info, result_df):
 # 四、测试评估
 
 1. 答案基本情况
-    
+
     答案中总图片数量: {}
 
     |缺陷名称|缺陷个数|

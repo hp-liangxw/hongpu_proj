@@ -1,22 +1,48 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from matplotlib.gridspec import GridSpec
 
-plt.figure(figsize=(6, 4))
+"""
+https://matplotlib.org/gallery/color/named_colors.html#sphx-glr-gallery-color-named-colors-py
+https://matplotlib.org/gallery/subplots_axes_and_figures/gridspec_multicolumn.html#sphx-glr-gallery-subplots-axes-and-figures-gridspec-multicolumn-py
+"""
 
-# pt = np.array([2, 2, 3, 3, 2, 2, 3, 3, 2, 2, 4, 4, 2, 2, 4, 4]).reshape(4, 4)
-pt = np.zeros((500, 500)) + 10
-# sns.heatmap(pt, linewidths=0.05, vmax=15, vmin=0, cmap='rainbow')
-# plt.show()
+plt.rcParams['font.family'] = 'STSong'
+
+fig = plt.figure(figsize=(6, 6))
+gs = GridSpec(1, 6, figure=fig)
+
+ax1 = fig.add_subplot(gs[0, :-1])
+ax2 = fig.add_subplot(gs[0, -1])
+
+cmap1 = plt.get_cmap("Pastel1")
+cmap2 = plt.get_cmap("tab20c")
+
+vals1 = [40, 80, 120, 30, 20]
+vals2 = [40, 80, 120, 50]
+vals3 = [1]
+
+ax1.pie(vals1, labels=["", 80, 120, 30, 20], colors=cmap1([19, 0, 1, 0, 1]), labeldistance=0.75, radius=1,
+        wedgeprops=dict(edgecolor='w'))
+ax1.pie(vals2, labels=[40, 40, 90, 10], colors=cmap2([11, 11, 11, 11]), labeldistance=0.6, radius=0.66,
+        wedgeprops=dict(edgecolor='w'))
+ax1.pie(vals3, radius=0.33, colors='w')
+
+ax2.hlines(0.6, 0.7, 0.9, color=cmap2(11), linewidth=12)
+ax2.text(1, 0.6, "组件", fontsize=10)
+ax2.hlines(0.5, 0.7, 0.9, colors=cmap1(19), linewidth=12)
+ax2.text(1, 0.5, "无缺陷", fontsize=10)
+ax2.hlines(0.4, 0.7, 0.9, colors=cmap1(0), linewidth=12)
+ax2.text(1, 0.4, "yinlie", fontsize=10)
+ax2.hlines(0.3, 0.7, 0.9, colors=cmap1(1), linewidth=12)
+ax2.text(1, 0.3, "xuhan", fontsize=10)
+
+ax2.yaxis.set_visible(False)
+ax2.xaxis.set_visible(False)
+ax2.set_axis_off()
+ax2.set_xlim([0.7, 1])
+ax2.set_ylim([0, 1])
 
 
-# a = [1, 3, 4, 3, 2, 3]
-# b = [3, 4, 1, 2, 3, 1]
-# c = [3, 4, 1, 3, 3, 6]
-# plt.plot(a, label='a')
-# plt.plot(b, label='b')
-# plt.plot(c, label='c')
-# plt.show()
-
-plt.pcolor(pt, cmap=plt.cm.Reds)
 plt.show()

@@ -416,3 +416,7 @@ class LabelHandler:
                             dst_img = os.path.sep.join([dst_path, xml_name + '.jpg'])
                             if not os.path.exists(dst_img):
                                 shutil.copyfile(img, dst_img)
+
+
+LabelHandler.del_empty_xml(r"F:\xuhan\xml")
+LabelHandler.print_all_labels(r"F:\xuhan\xml")
