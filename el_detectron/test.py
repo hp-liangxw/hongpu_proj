@@ -383,6 +383,7 @@ def get_gold_defect_info(result_df, defect_types, pre_process):
         defect_loc_df["loc"] = defect_loc_df["class"]
 
     # 对loc按serial_number进行聚合
+    defect_loc_df['pic_name'] = (defect_loc_df['pic_name']).astype(str)
     defect_grouped = defect_loc_df['loc'].groupby(defect_loc_df['pic_name']).apply(lambda x: set(x))
     res = {}
     for s_n in defect_grouped.index:
@@ -415,7 +416,7 @@ def draw_bbox_normal(img_path, save_path, result_loc):
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
 
-def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, line_dict):
+def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, line_dict, all_defect_types):
     """
     有答案，有前处理时，绘制bbox。
     :param img_path:
@@ -432,12 +433,37 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
     miss_names = gold_names - result_names
     overkill_names = result_names - gold_names
 
+    # 绘图的一些参数
+    inners = {}
+    outers = {}
+    for i in all_defect_types:
+        outers["ok_" + i] = 0
+        outers["over_" + i] = 0
+        outers["miss_" + i] = 0
+        outers["other_" + i] = 0
+
+    inners['ok'] = 0
+    inners['over'] = len(overkill_names)
+    inners['miss'] = len(miss_names)
+    inners["other"] = 0
+
     # 正确检出
     font = cv2.FONT_HERSHEY_SIMPLEX
     for name in ok_names:
         r_info = result_loc[name]
         g_info = gold_loc[name]
-
+        # for plots
+        r_num = ["_".join([i.split("_")[0], i.split("_")[-2], i.split("_")[-1]]) for i in r_info]
+        g_num = g_info
+        if r_num == g_num:
+            inners['ok'] += 1
+            for k in r_num:
+                outers["ok_" + k.split("_")[0]] += 1
+        else:
+            inners["other"] += 1
+            for k in r_num:
+                outers["other_" + k.split("_")[0]] += 1
+        # for bbox
         row_lines, col_lines = line_dict[name]
 
         pic_file = os.path.join(img_path, name + ".jpg")
@@ -481,8 +507,9 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
             for i in r_info:
                 defect_type, x1, x2, y1, y2, score, row, col = i.split("_")
                 row, col, x1, x2, y1, y2 = int(row), int(col), int(x1), int(x2), int(y1), int(y2)
-
-                # 过检为黄色
+                # 饼图绘制的参数
+                outers["over_" + defect_type] += 1
+                # 过检的bbox为黄色
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
                 cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
 
@@ -499,6 +526,8 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
             for i in g_info:
                 defect_type, row, col = i.split("_")
                 row, col = int(row), int(col)
+                # 饼图绘制的参数
+                outers["miss_" + defect_type] += 1
                 x1, y1, x2, y2 = col_lines[col - 1], row_lines[row - 1], col_lines[col], row_lines[row]
                 # 漏检为红色
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 0, 255), 3)
@@ -506,8 +535,10 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
 
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
+    return inners, outers
 
-def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
+
+def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_defect_types):
     """
     有答案，无前处理时，绘制bbox
     :param img_path:
@@ -523,12 +554,38 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
     miss_names = gold_names - result_names
     overkill_names = result_names - gold_names
 
+    # 绘图的一些参数
+    inners = {}
+    outers = {}
+    for i in all_defect_types:
+        outers["ok_" + i] = 0
+        outers["over_" + i] = 0
+        outers["miss_" + i] = 0
+        outers["other_" + i] = 0
+
+    inners['ok'] = 0
+    inners['over'] = len(overkill_names)
+    inners['miss'] = len(miss_names)
+    inners["other"] = 0
+
     # 正确检出
     font = cv2.FONT_HERSHEY_SIMPLEX
     for name in ok_names:
         r_info = result_loc[name]
         g_info = gold_loc[name]
 
+        # for plots
+        r_num = ["_".join([i.split("_")[0], i.split("_")[-2], i.split("_")[-1]]) for i in r_info]
+        g_num = g_info
+        if r_num == g_num:
+            inners['ok'] += 1
+            for k in r_num:
+                outers["ok_" + k.split("_")[0]] += 1
+        else:
+            inners["other"] += 1
+            for k in r_num:
+                outers["other_" + k.split("_")[0]] += 1
+        # for bbox
         pic_file = os.path.join(img_path, name + ".jpg")
         if os.path.exists(pic_file):
             img_data = cv2.imread(pic_file)
@@ -564,6 +621,8 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
             for i in r_info:
                 defect_type, x1, x2, y1, y2, score = i.split("_")
                 x1, x2, y1, y2 = int(x1), int(x2), int(y1), int(y2)
+                # 饼图绘制的参数
+                outers["over_" + defect_type] += 1
 
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
                 cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
@@ -577,25 +636,11 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
         pic_file = os.path.join(img_path, name + ".jpg")
         if os.path.exists(pic_file):
             for i in g_info:
+                # 饼图绘制的参数
+                outers["miss_" + i] += 1
                 shutil.copyfile(pic_file, os.path.join(save_path, name + "_miss_" + i + "_.jpg"))
 
-
-def add_defect_2_info(defect, defect_types, info, score):
-    """
-
-    :param defect:
-    :param defect_types:
-    :param info:
-    :param score:
-    :return:
-    """
-    score = float(score)
-    if defect in defect_types:
-        if defect in info.keys():
-            info[defect].append(score)
-        else:
-            info[defect] = [score]
-
+    return inners, outers
 
 def plots_parameters(config_info, result_loc, all_defect_types, pic_shape):
     # 用于绘制双层饼图
@@ -711,10 +756,6 @@ def main():
 
         # draw bbox
         draw_bbox_normal(img_folder, save_folder, result_loc)
-        # 输出md文件
-        inner_n, outer_n, scores, loc_matrix = plots_parameters(cfgs, result_loc, all_defect_types, pic_shape)
-        f_md.write(module_results_info(cfgs, inner_n, outer_n, scores, loc_matrix))
-        f_md.close()
     # 4.2 有答案
     else:
         # 4.2.1 无前处理
@@ -726,44 +767,23 @@ def main():
             result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=False)
             gold_loc = get_gold_defect_info(gold_df, all_defect_types, pre_process=False)
             # draw bbox
-            draw_bbox_with_answer_no_pre(img_folder, save_folder, result_loc, gold_loc)
-            # 答案相关信息
-            for defects in gold_loc.values():
-                for i in defects:
-                    add_defect_2_info(i, all_defect_types, gold_info, 1)
+            inners_gt, outers_gt = draw_bbox_with_answer_no_pre(img_folder, save_folder, result_loc, gold_loc,
+                                                                all_defect_types)
         # 4.2.2 有前处理
         else:
             img_folder = cfgs.PRE_PROCESS['origin_folder']
             result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=True)
             gold_loc = get_gold_defect_info(gold_df, all_defect_types, pre_process=True)
             # draw bbox
-            draw_bbox_with_answer_with_pre(img_folder, save_folder, result_loc, gold_loc, line_dict)
-            # 答案相关信息
-            r = cfgs.PRE_PROCESS['size']['rows']
-            c = cfgs.PRE_PROCESS['size']['cols']
-            loc_matrix = np.zeros((r, c))  # 用于绘制热力图
-            for defects in gold_loc.values():
-                for i in defects:
-                    d_type, row, col = i.split("_")
-                    loc_matrix[int(row) - 1, int(col) - 1] += 1
-                    add_defect_2_info(d_type, all_defect_types, gold_info, 1)
-            # 绘制答案中缺陷分布热力图
-            plt.figure(figsize=(12, 6))
-            plt.pcolor(loc_matrix, cmap=plt.cm.Reds)
-            plt.savefig(os.path.join(cfgs.OUTPUT_FOLDER, 'pics', "heatmap_ground_truth.jpg"))
+            inners_gt, outers_gt = draw_bbox_with_answer_with_pre(img_folder, save_folder, result_loc, gold_loc,
+                                                                  line_dict, all_defect_types)
 
-    # 五、报告输出
-    # md_path = os.path.join(cfgs.OUTPUT_FOLDER, 'summary.md')
-    # with open(md_path, "w") as f_md:
-    #     f_md.write(title_str())
-    #     f_md.write(module_basic_info(cfgs))
-    #     f_md.write(module_config_info(cfgs))
-    #     f_md.write(module_results_info(cfgs, result_loc))
-    #
-    #     # 若需要评估，则再增加最后部分
-    #     if cfgs.EVALUATION['switch']:
-    #         if gold_info is not None:
-    #             f_md.write(module_evaluation(cfgs, gold_info, result_df))
+    # 继续输出md文件
+    inner_res, outer_res, score_res, loc_matrix_res = plots_parameters(cfgs, result_loc, all_defect_types, pic_shape)
+    f_md.write(module_results_info(cfgs, inner_res, outer_res, score_res, loc_matrix_res))
+    if cfgs.EVALUATION['switch']:
+        f_md.write(module_evaluation(cfgs, all_defect_types, inners_gt, outers_gt, gold_loc, result_df))
+    f_md.close()
 
     logger.info('===========================================================')
     logger.info('!!!finish write md file')

@@ -299,7 +299,7 @@ def select_defect_thresh(select_defect, defect_dict, standard_testsets, csv_bbox
     return defect_th, total_missover
 
 
-def module_evaluation(config_info, gt_info, result_df):
+def module_evaluation(config_info, all_defect_types, inner, outer, gold_loc, result_df):
     """
     第四部分，评估测试结果
     1. 答案基本情况。多少组件，多少缺陷。
@@ -308,37 +308,165 @@ def module_evaluation(config_info, gt_info, result_df):
     4.
     :return:
     """
+    # 检测到的缺陷类型与数量
+    detected_types = []
+    each_defect_num = {}
+    for i in outer:
+        if outer[i] > 0:
+            name = i.split("_")[-1]
+            detected_types.append(name)
+            if name in each_defect_num.keys():
+                each_defect_num[name] += 1
+            else:
+                each_defect_num[name] = 1
+    detected_types = set(detected_types)
+
+    # 1. 饼图
+    fig = plt.figure(figsize=(6, 6))
+    gs = GridSpec(1, 6, figure=fig)
+    ax1 = fig.add_subplot(gs[0, :-1])
+    ax2 = fig.add_subplot(gs[0, -1])
+    cmap1 = plt.get_cmap("Pastel1")
+    cmap2 = plt.get_cmap("tab20c")
+
+    # 绘制饼图的val，label，color
+    outer_val = []
+    outer_label = []
+    outer_color = []
+    inner_val = []
+    inner_label = []
+    inner_color = []
+
+    # 各个缺陷的颜色映射表
+    color_map = {}
+    for ind, i in enumerate(detected_types):
+        if ind >= 2:  # 2为内图的颜色
+            ind = ind + 1
+        color_map[i] = ind
+
+    # 过检
+    n1 = 0
+    for k in detected_types:
+        if outer["over_" + k] > 0:
+            outer_val.append(outer["over_" + k])
+            outer_label.append(outer["over_" + k])
+            outer_color.append(color_map[k])
+            n1 += outer["over_" + k]
+    if n1 > 0:
+        inner_val.append(n1)
+        inner_label.append(inner['over'])
+        inner_color.append(16)
+
+    # 漏检
+    n2 = 0
+    for k in detected_types:
+        if outer["miss_" + k] > 0:
+            outer_val.append(outer["miss_" + k])
+            outer_label.append(outer["miss_" + k])
+            outer_color.append(color_map[k])
+            n2 += outer["miss_" + k]
+    if n2 > 0:
+        inner_val.append(n2)
+        inner_label.append(inner['miss'])
+        inner_color.append(4)
+
+    # 正确检出
+    n3 = 0
+    for k in detected_types:
+        if outer["ok_" + k] > 0:
+            outer_val.append(outer["ok_" + k])
+            outer_label.append(k + ":" + str(outer["ok_" + k]))
+            outer_color.append(color_map[k])
+            n3 += outer["ok_" + k]
+    if n3 > 0:
+        inner_val.append(n3)
+        inner_label.append(inner['ok'])
+        inner_color.append(8)
+
+    # 其它
+    n4 = 0
+    for k in detected_types:
+        if outer["other_" + k] > 0:
+            outer_val.append(outer["other_" + k])
+            outer_label.append(outer["other_" + k])
+            outer_color.append(color_map[k])
+            n4 += outer["other_" + k]
+    if n4 > 0:
+        inner_val.append(n4)
+        inner_label.append(inner['other'])
+        inner_color.append(0)
+
+    # 开始绘制
+    ax1.pie(outer_val, labels=outer_label, colors=cmap1(outer_color), labeldistance=0.75, radius=1,
+            wedgeprops=dict(edgecolor='w'))
+    ax1.pie(inner_val, labels=inner_label, colors=cmap2(inner_color), labeldistance=0.66, radius=0.66,
+            wedgeprops=dict(edgecolor='w'))
+    ax1.pie([1], radius=0.33, colors='w')
+    # 绘制colorbar
+    # 第一个0.5参数表示垂直高度，第二个和第三个参数0.7、0.9表示色块的长度。参照系是xlim和ylim的长度。
+    ct = 1
+    if n1 > 0:
+        ax2.hlines(0.5 + 0.05 * ct, 0.7, 0.9, color=cmap2(16), linewidth=12)
+        ax2.text(0.95, 0.5 + 0.05 * ct, "overkill", fontsize=10)
+        ct += 1
+    if n2 > 0:
+        ax2.hlines(0.5 + 0.05 * ct, 0.7, 0.9, color=cmap2(4), linewidth=12)
+        ax2.text(0.95, 0.5 + 0.05 * ct, "miss", fontsize=10)
+        ct += 1
+    if n3 > 0:
+        ax2.hlines(0.5 + 0.05 * ct, 0.7, 0.9, color=cmap2(8), linewidth=12)
+        ax2.text(0.95, 0.5 + 0.05 * ct, "normal", fontsize=10)
+        ct += 1
+    if n4 > 0:
+        ax2.hlines(0.5 + 0.05 * ct, 0.7, 0.9, color=cmap2(0), linewidth=12)
+        ax2.text(0.95, 0.5 + 0.05 * ct, "other", fontsize=10)
+        ct += 1
+    ct = 0
+    for i in color_map:
+        ax2.hlines(0.5 - 0.05 * ct, 0.7, 0.9, colors=cmap1(color_map[i]), linewidth=12)
+        ax2.text(0.95, 0.5 - 0.05 * ct, i, fontsize=10)
+        ct += 1
+    ax2.yaxis.set_visible(False)
+    ax2.xaxis.set_visible(False)
+    ax2.set_axis_off()
+    ax2.set_xlim([0.7, 1])
+    ax2.set_ylim([0, 1 - (ct + 1 - 2) * 0.05])
+    plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "golden_defects_ratio.jpg"))
+
     # 所有缺陷类型
-    all_defect_types = config_info.types_and_ratios.keys()
-    # 答案中的缺陷类型
-    gold_types = gt_info.keys()
-    #
-    num = 0
-    for i in gt_info.values():
-        num += len(i)
+
+    # 答案中的缺陷分布
+    gold_defects = {}
+    for v in gold_loc.values():
+        for w in v:
+            name = w.split("_")[0]
+            if name in gold_defects:
+                gold_defects[name] += 1
+            else:
+                gold_defects[name] = 1
+
     # --------------------
     # markdown字符串
     module_str = """
-# 四、测试评估
+## 三、测试评估
 
 1. 答案基本情况
 
-    答案中总图片数量: {}
+    答案中总图片数量: {}<br>
+    答案中各缺陷数量：
 
     |缺陷名称|缺陷个数|
-    | --- | --- |""".format(num)
+    | --- | --- |""".format(len(gold_loc))
 
-    for i in gold_types:
+    for i in gold_defects:
         module_str += """
-    |{}|{}|""".format(i, len(gt_info[i]))
+    |{}|{}|""".format(i, gold_defects[i])
 
     module_str += """
 
-    答案缺陷分布热力图
-    ![]({})
-<br>
-    """.format(os.path.join('pics', "heatmap_ground_truth.jpg"))
+    ![]({})""".format(os.path.join('pics', "golden_defects_ratio.jpg"))
 
+    # --------------------
     # 选择合适置信度
     if config_info.EVALUATION['select_th']['switch'] is True:
         step = config_info.EVALUATION['select_th']['step']

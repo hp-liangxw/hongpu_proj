@@ -45,5 +45,4 @@ ax2.set_axis_off()
 ax2.set_xlim([0.7, 1])
 ax2.set_ylim([0, 0.9])
 
-
 plt.show()
