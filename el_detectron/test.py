@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 import os
 import cv2
 import glob
+import re
 
 import yaml
 import shutil
@@ -99,14 +100,18 @@ class Config:
                 return 1
             # 需要筛选置信度时：
             if self.EVALUATION['select_th']['switch'] is True:
-                select_th_keys = self.EVALUATION['select_th'].keys()
+                select_th_keys = self.EVALUATION['select_th']
                 # 判断参数是否正确
+                print(type(select_th_keys['miss_number']))
                 if 'step' not in select_th_keys or \
-                        not 'step'.isdigit() or float('step') <= 0 or \
+                        type(select_th_keys['step']) is str or \
+                        select_th_keys['step'] <= 0 or \
                         'miss_number' not in select_th_keys or \
-                        not 'miss_number'.isdigit() or float('miss_number') <= 0 or \
+                        type(select_th_keys['miss_number']) is str or \
+                        select_th_keys['miss_number'] <= 0 or \
                         'overkill_number' not in select_th_keys or \
-                        not 'overkill_number'.isdigit() or float('overkill_number') <= 0:
+                        type(select_th_keys['overkill_number']) is str or \
+                        select_th_keys['overkill_number'] <= 0:
                     logger.info("paramaters: {} not right!".format("step, miss_number, overkill_number"))
                     return 1
 
@@ -601,8 +606,8 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_
                 # 过检
                 else:
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30),
-                                font, 1.2, (0, 255, 255), 3)
+                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255),
+                                3)
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
             # 漏检
@@ -641,6 +646,7 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_
                 shutil.copyfile(pic_file, os.path.join(save_path, name + "_miss_" + i + "_.jpg"))
 
     return inners, outers
+
 
 def plots_parameters(config_info, result_loc, all_defect_types, pic_shape):
     # 用于绘制双层饼图
@@ -760,7 +766,6 @@ def main():
     else:
         # 4.2.1 无前处理
         gold_df = pd.read_csv(cfgs.EVALUATION['csv_path'])
-        gold_info = {}
         # 无前处理
         if not cfgs.PRE_PROCESS['switch']:
             img_folder = cfgs.IMG_CUT_FOLDER
