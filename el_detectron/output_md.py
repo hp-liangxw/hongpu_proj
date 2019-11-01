@@ -272,7 +272,7 @@ def select_defect_thresh(select_defect, defect_dict, standard_testsets, csv_bbox
     根据测试集选择单个缺陷置信度
     param:
         select_defect: 待测缺陷, str
-        defect_dict-->config_info.types_and_ratios
+        defect_dict
         standard_testsets
         csv_bbox
         step: 查找置信度的步长, float
@@ -297,6 +297,27 @@ def select_defect_thresh(select_defect, defect_dict, standard_testsets, csv_bbox
         defect_th = start_th
 
     return defect_th, total_missover
+
+
+def pre_evaluation(standard_testsets, filter_csv_bbox, defect_name):
+    # 大图松
+    answer_defect1 = get_piclist_defect(standard_testsets, defect_name, False)
+    paper_defect1 = get_piclist_defect(filter_csv_bbox, defect_name, False)
+    miss_list1 = answer_defect1 - paper_defect1
+    overkill_list1 = paper_defect1 - answer_defect1
+    true_list1 = answer_defect1 & paper_defect1
+    # 小图
+    answer_defect2 = get_piclist_defect(standard_testsets, defect_name, True)
+    paper_defect2 = get_piclist_defect(filter_csv_bbox, defect_name, True)
+    miss_list2 = answer_defect2 - paper_defect2
+    overkill_list2 = paper_defect2 - answer_defect2
+    true_list2 = answer_defect2 & paper_defect2
+    # 大图紧
+    miss_list3 = set([miss_pic.split('-')[0] for miss_pic in miss_list2])
+    overkill_list3 = set([over_pic.split('-')[0] for over_pic in overkill_list2])
+    true_list3 = answer_defect1 - miss_list3 - overkill_list3
+
+    return miss_list1, overkill_list1, true_list1, miss_list2, overkill_list2, true_list2, miss_list3, overkill_list3, true_list3
 
 
 def module_evaluation(config_info, all_defect_types, inner, outer, gold_loc, result_df):
@@ -446,6 +467,51 @@ def module_evaluation(config_info, all_defect_types, inner, outer, gold_loc, res
                 gold_defects[name] = 1
 
     # --------------------
+    # 选择合适置信度
+    types_and_ratios = {}
+    for i in config_info.model_infos.values():
+        for j in i["threshold"]:
+            types_and_ratios[j] = i["threshold"][j]
+    if config_info.EVALUATION['select_th']['switch'] is True:
+        step = config_info.EVALUATION['select_th']['step']
+        miss_num = config_info.EVALUATION['select_th']['miss_number']
+        overkill_num = config_info.EVALUATION['select_th']['overkill_number']
+        if_preprocess = config_info.PRE_PROCESS['switch']
+        standard_testsets = pd.read_csv(config_info.EVALUATION['csv_path'])
+
+        csv_bbox = result_df.copy()
+        csv_bbox.loc[csv_bbox['class'] == 'shixiao', 'class'] = 'yinlie'
+        dtype_ratio = {}
+        total_missover = None
+        for select_defect in all_defect_types:
+            defect_th, total_missover = select_defect_thresh(select_defect, types_and_ratios,
+                                                             standard_testsets, csv_bbox, step,
+                                                             miss_num, overkill_num, if_preprocess)
+            dtype_ratio[select_defect] = defect_th
+
+        print(total_missover)
+        plt.figure(figsize=(6, 6))
+        length = len(total_missover['defect_th'].values)
+
+        x = range(1, length + 1)
+        x_label = [str(i) for i in total_missover['defect_th'].values]
+        y1 = total_missover['miss_num'].values
+        y2 = total_missover['overkill_num'].values
+        y3 = total_missover['ng_num'].values
+
+        plt.bar(x, y1, align="center", tick_label=x_label, color=cmap1(1), label="miss")
+        plt.bar(x, y2, align="center", bottom=y1, color=cmap1(2), label="overkill")
+        plt.bar(x, y3, align="center", bottom=y1 + y2, color=cmap1(4), label="ng")
+        plt.plot(range(-1, length + 2), [config_info.EVALUATION['select_th']['miss_number']] * (length + 3), 'r--',
+                 label="maximum of missed")
+        plt.xlabel("threshold")
+        plt.ylabel("number")
+        plt.xlim(0, length + 1)
+
+        plt.legend()
+        plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "line_threshold.jpg"))
+
+    # --------------------
     # markdown字符串
     module_str = """
 ## 三、测试评估
@@ -466,29 +532,11 @@ def module_evaluation(config_info, all_defect_types, inner, outer, gold_loc, res
 
     ![]({})""".format(os.path.join('pics', "golden_defects_ratio.jpg"))
 
-    # --------------------
-    # 选择合适置信度
-    if config_info.EVALUATION['select_th']['switch'] is True:
-        step = config_info.EVALUATION['select_th']['step']
-        miss_num = config_info.EVALUATION['select_th']['miss_number']
-        overkill_num = config_info.EVALUATION['select_th']['overkill_number']
-        if_preprocess = config_info.PRE_PROCESS['switch']
-        standard_testsets = pd.read_csv(config_info.EVALUATION['csv_path'])
+    module_str += """
 
-        csv_bbox = result_df.copy()
-        csv_bbox.loc[csv_bbox['class'] == 'shixiao', 'class'] = 'yinlie'
-        dtype_ratio = {}
-        total_missover = None
-        for select_defect in all_defect_types:
-            defect_th, total_missover = select_defect_thresh(select_defect, config_info.types_and_ratios,
-                                                             standard_testsets, csv_bbox, step,
-                                                             miss_num, overkill_num, if_preprocess)
-            dtype_ratio[select_defect] = defect_th
-
-        plt.figure(figsize=(6, 6))
-        plt.plot(total_missover['defect_th'].values, total_missover['miss_num'].values, label='miss_num')
-        plt.plot(total_missover['defect_th'].values, total_missover['overkill_num'].values, label='overkill_num')
-        plt.plot(total_missover['defect_th'].values, total_missover['ng_num'].values, label='ng_num')
-        plt.savefig(os.path.join(config_info.OUTPUT_FOLDER, 'pics', "line_threshold.jpg"))
+2. 不同置信度下的过检与漏检
+    
+    ![]({})  
+""".format(os.path.join('pics', "line_threshold.jpg"))
 
     return module_str
