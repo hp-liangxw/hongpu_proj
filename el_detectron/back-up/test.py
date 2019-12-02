@@ -5,20 +5,33 @@ from __future__ import unicode_literals
 import os
 import cv2
 import glob
+import sys
 
 import yaml
 import shutil
+import logging
 import pandas as pd
 import numpy as np
+from matplotlib import pyplot as plt
 from src.pre_process import grid_cut
-from src.yinlie_post_process import yinlie_xizhi
 from src.auto_labeling import csv2xml
-from src.utils import get_logger
 from output_md import *
 
 from predictor import infer_simple
 
-logger = get_logger()
+logger = logging.getLogger('mylogger')
+logger.setLevel(logging.INFO)
+
+rf_handler = logging.StreamHandler(sys.stderr)  # 默认是sys.stderr
+rf_handler.setLevel(logging.INFO)
+rf_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(message)s"))
+
+f_handler = logging.FileHandler('test.log')
+f_handler.setLevel(logging.INFO)
+f_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(message)s"))
+
+logger.addHandler(rf_handler)
+logger.addHandler(f_handler)
 
 
 class Config:
@@ -27,7 +40,8 @@ class Config:
 
         self.yml_str = None
 
-        self.model_infos = None
+        self.types_and_ratios = None
+        self.model_paths = None
 
         self.INFO = None
         self.PRE_PROCESS = None
@@ -53,7 +67,7 @@ class Config:
         # 读取配置文件
         self.yml_str = open(self.config_path).read()
         try:
-            cfg_info = yaml.load(self.yml_str)
+            cfg_info = yaml.load(self.yml_str, Loader=yaml.FullLoader)
 
             self.INFO = cfg_info['info']
 
@@ -71,46 +85,38 @@ class Config:
             logger.info("failed to read configuration file")
             return 1
 
-        # 有前处理时：
+        # 有前处理时，前处理文件夹是否存在
         if self.PRE_PROCESS['switch'] is True:
-            # 判断前处理文件夹是否存在
             if not os.path.exists(self.PRE_PROCESS['origin_folder']):
                 logger.info("path: {} not exists!".format(self.PRE_PROCESS['origin_folder']))
                 return 1
-        else:
-            # 判断图片输入路径是否存在
-            if not os.path.exists(self.IMG_CUT_FOLDER):
-                logger.info("path: {} not exists!".format(self.IMG_CUT_FOLDER))
+            if os.path.exists(self.IMG_CUT_FOLDER):
+                shutil.rmtree(self.IMG_CUT_FOLDER)
+            os.mkdir(self.IMG_CUT_FOLDER)
+
+        # 图片输入路径是否存在
+        if not os.path.exists(self.IMG_CUT_FOLDER):
+            logger.info("path: {} not exists!".format(self.IMG_CUT_FOLDER))
+            return 1
+
+        # 模型路径是否存在
+        self.types_and_ratios, self.model_paths = self.get_defect_info()
+        for i in self.model_paths.values():
+            if not os.path.exists(i):
+                logger.info("path: {} not exists!".format(i))
                 return 1
 
-        # 判断模型路径是否存在
-        self.model_infos = self.get_model_info()
-        for i in self.model_infos.values():
-            if not os.path.exists(i['model_dir']):
-                logger.info("path: {} not exists!".format(i['model_dir']))
-                return 1
-
-        # 需要评估时：
+        # 答案是否存在
         if self.EVALUATION['switch'] is True:
-            # 判断答案文件是否存在
             if not os.path.exists(self.EVALUATION['csv_path']):
                 logger.info("path: {} not exists!".format(self.EVALUATION['csv_path']))
                 return 1
-            # 需要筛选置信度时：
             if self.EVALUATION['select_th']['switch'] is True:
-                select_th_keys = self.EVALUATION['select_th']
-                # 判断参数是否正确
-                print(type(select_th_keys['miss_number']))
+                select_th_keys = self.EVALUATION['select_th'].keys()
                 if 'step' not in select_th_keys or \
-                        type(select_th_keys['step']) is str or \
-                        select_th_keys['step'] <= 0 or \
                         'miss_number' not in select_th_keys or \
-                        type(select_th_keys['miss_number']) is str or \
-                        select_th_keys['miss_number'] <= 0 or \
-                        'overkill_number' not in select_th_keys or \
-                        type(select_th_keys['overkill_number']) is str or \
-                        select_th_keys['overkill_number'] <= 0:
-                    logger.info("paramaters: {} not right!".format("step, miss_number, overkill_number"))
+                        'overkill_number' not in select_th_keys:
+                    logger.info("paramaters: {} not exists!".format("step, miss_number, overkill_number"))
                     return 1
 
         # 创建输出文件夹
@@ -137,33 +143,21 @@ class Config:
         else:
             return 1
 
-    def get_model_info(self):
+    def get_defect_info(self):
         """
         获取缺陷类型、缺陷置信度、模型路径
-        model_infos:{
-            "yinlie": {
-                "model_dir": /root/el/yinlie.model",
-                "threshold": {"yinlie": 0.9, "shixiao": 0.9},
-            },
-            "xuhan": {
-                "model_dir" : /root/el/xuhan.model",
-                "threshold": {"shixiao": 0.9},
-            }
-        }
+        :param MODEL:
         :return:
         """
         # 缺陷类型与置信度
-        model_infos = {}
-        for model_name, this_info in self.MODEL.items():
-            # 模型路径
-            model_infos[model_name] = {
-                "model_dir": this_info["model_dir"],  # 模型路径
-                "threshold": {}  # 缺陷名与置信度
-            }
-            for defect_name, defect_threshold in this_info["threshold"].items():
-                # 缺陷类型与置信度
-                model_infos[model_name]["threshold"][defect_name] = defect_threshold
-        return model_infos
+        types_and_ratios = {}
+        model_paths = {}
+        for model_type, model_info in self.MODEL.items():
+            model_paths[model_type] = model_info["model_dir"]
+            for defect_type, defect_info in model_info["threshold"].items():
+                types_and_ratios[defect_type] = defect_info
+
+        return types_and_ratios, model_paths
 
     def get_pic_info(self):
         """
@@ -184,8 +178,7 @@ class Config:
                 shutil.rmtree(self.IMG_CUT_FOLDER)
             os.mkdir(self.IMG_CUT_FOLDER)
 
-            # 切图
-            # 小图的行列号是从1开始
+            # cut zujian pic
             for img in glob.glob(os.path.join(self.PRE_PROCESS['origin_folder'], '*.jpg')):
                 img_name = os.path.basename(img).split('.')[0]
                 img_data = cv2.imread(img)
@@ -200,6 +193,7 @@ class Config:
                             cv2.imwrite(os.path.join(self.IMG_CUT_FOLDER, name), cut_images[row_lines[i], col_lines[j]])
                 except:
                     pass
+
             logger.info('===========================================================')
             logger.info('!!!finish pre_process')
         else:
@@ -341,7 +335,6 @@ def get_output_defect_info(result_df, defect_types, pre_process):
                                + (defect_loc_df["row"]).astype(str) + "_" \
                                + (defect_loc_df["col"]).astype(str)
         # 对loc按serial_number进行聚合
-        defect_loc_df['big_pic'] = (defect_loc_df['big_pic']).astype(str)
         defect_grouped = defect_loc_df['loc'].groupby(defect_loc_df['big_pic']).apply(lambda x: set(x))
     # 无前处理
     else:
@@ -351,7 +344,6 @@ def get_output_defect_info(result_df, defect_types, pre_process):
                                + (defect_loc_df["ymin"]).astype(str) + "_" \
                                + (defect_loc_df["ymax"]).astype(str) + "_" \
                                + (defect_loc_df["score"]).astype(str)
-        defect_loc_df['pic_name'] = (defect_loc_df['pic_name']).astype(str)
         defect_grouped = defect_loc_df['loc'].groupby(defect_loc_df['pic_name']).apply(lambda x: set(x))
 
     res = {}
@@ -386,7 +378,6 @@ def get_gold_defect_info(result_df, defect_types, pre_process):
         defect_loc_df["loc"] = defect_loc_df["class"]
 
     # 对loc按serial_number进行聚合
-    defect_loc_df['pic_name'] = (defect_loc_df['pic_name']).astype(str)
     defect_grouped = defect_loc_df['loc'].groupby(defect_loc_df['pic_name']).apply(lambda x: set(x))
     res = {}
     for s_n in defect_grouped.index:
@@ -395,9 +386,9 @@ def get_gold_defect_info(result_df, defect_types, pre_process):
     return res
 
 
-def draw_bbox_normal(img_path, save_path, result_loc):
+def draw_bbox_no_answer(img_path, save_path, result_loc):
     """
-    无答案时（有/无前处理）绘制bbox
+    无答案时绘制bbox
     :param img_path:
     :param save_path:
     :param result_loc:
@@ -419,7 +410,7 @@ def draw_bbox_normal(img_path, save_path, result_loc):
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
 
-def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, line_dict, all_defect_types):
+def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, line_dict):
     """
     有答案，有前处理时，绘制bbox。
     :param img_path:
@@ -436,37 +427,12 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
     miss_names = gold_names - result_names
     overkill_names = result_names - gold_names
 
-    # 绘图的一些参数
-    inners = {}
-    outers = {}
-    for i in all_defect_types:
-        outers["ok_" + i] = 0
-        outers["over_" + i] = 0
-        outers["miss_" + i] = 0
-        outers["other_" + i] = 0
-
-    inners['ok'] = 0
-    inners['over'] = len(overkill_names)
-    inners['miss'] = len(miss_names)
-    inners["other"] = 0
-
     # 正确检出
     font = cv2.FONT_HERSHEY_SIMPLEX
     for name in ok_names:
         r_info = result_loc[name]
         g_info = gold_loc[name]
-        # for plots
-        r_num = ["_".join([i.split("_")[0], i.split("_")[-2], i.split("_")[-1]]) for i in r_info]
-        g_num = g_info
-        if r_num == g_num:
-            inners['ok'] += 1
-            for k in r_num:
-                outers["ok_" + k.split("_")[0]] += 1
-        else:
-            inners["other"] += 1
-            for k in r_num:
-                outers["other_" + k.split("_")[0]] += 1
-        # for bbox
+
         row_lines, col_lines = line_dict[name]
 
         pic_file = os.path.join(img_path, name + ".jpg")
@@ -484,8 +450,7 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
                 else:
                     # 过检为黄色
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255),
-                                3)
+                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
 
             for i in g_info:
                 defect_type, row, col = i.split("_")
@@ -510,9 +475,8 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
             for i in r_info:
                 defect_type, x1, x2, y1, y2, score, row, col = i.split("_")
                 row, col, x1, x2, y1, y2 = int(row), int(col), int(x1), int(x2), int(y1), int(y2)
-                # 饼图绘制的参数
-                outers["over_" + defect_type] += 1
-                # 过检的bbox为黄色
+
+                # 过检为黄色
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
                 cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
 
@@ -529,8 +493,6 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
             for i in g_info:
                 defect_type, row, col = i.split("_")
                 row, col = int(row), int(col)
-                # 饼图绘制的参数
-                outers["miss_" + defect_type] += 1
                 x1, y1, x2, y2 = col_lines[col - 1], row_lines[row - 1], col_lines[col], row_lines[row]
                 # 漏检为红色
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 0, 255), 3)
@@ -538,10 +500,8 @@ def draw_bbox_with_answer_with_pre(img_path, save_path, result_loc, gold_loc, li
 
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
-    return inners, outers
 
-
-def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_defect_types):
+def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc):
     """
     有答案，无前处理时，绘制bbox
     :param img_path:
@@ -557,38 +517,12 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_
     miss_names = gold_names - result_names
     overkill_names = result_names - gold_names
 
-    # 绘图的一些参数
-    inners = {}
-    outers = {}
-    for i in all_defect_types:
-        outers["ok_" + i] = 0
-        outers["over_" + i] = 0
-        outers["miss_" + i] = 0
-        outers["other_" + i] = 0
-
-    inners['ok'] = 0
-    inners['over'] = len(overkill_names)
-    inners['miss'] = len(miss_names)
-    inners["other"] = 0
-
     # 正确检出
     font = cv2.FONT_HERSHEY_SIMPLEX
     for name in ok_names:
         r_info = result_loc[name]
         g_info = gold_loc[name]
 
-        # for plots
-        r_num = ["_".join([i.split("_")[0], i.split("_")[-2], i.split("_")[-1]]) for i in r_info]
-        g_num = g_info
-        if r_num == g_num:
-            inners['ok'] += 1
-            for k in r_num:
-                outers["ok_" + k.split("_")[0]] += 1
-        else:
-            inners["other"] += 1
-            for k in r_num:
-                outers["other_" + k.split("_")[0]] += 1
-        # for bbox
         pic_file = os.path.join(img_path, name + ".jpg")
         if os.path.exists(pic_file):
             img_data = cv2.imread(pic_file)
@@ -604,8 +538,8 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_
                 # 过检
                 else:
                     cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
-                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255),
-                                3)
+                    cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30),
+                                font, 1.2, (0, 255, 255), 3)
             cv2.imwrite(os.path.join(save_path, name + ".jpg"), img_data)
 
             # 漏检
@@ -624,8 +558,6 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_
             for i in r_info:
                 defect_type, x1, x2, y1, y2, score = i.split("_")
                 x1, x2, y1, y2 = int(x1), int(x2), int(y1), int(y2)
-                # 饼图绘制的参数
-                outers["over_" + defect_type] += 1
 
                 cv2.rectangle(img_data, (x1 - 12, y1 - 12), (x2 + 12, y2 + 12), (0, 255, 255), 3)
                 cv2.putText(img_data, defect_type + ":" + score[:7], (x1 - 12, y1 - 30), font, 1.2, (0, 255, 255), 3)
@@ -639,60 +571,24 @@ def draw_bbox_with_answer_no_pre(img_path, save_path, result_loc, gold_loc, all_
         pic_file = os.path.join(img_path, name + ".jpg")
         if os.path.exists(pic_file):
             for i in g_info:
-                # 饼图绘制的参数
-                outers["miss_" + i] += 1
                 shutil.copyfile(pic_file, os.path.join(save_path, name + "_miss_" + i + "_.jpg"))
 
-    return inners, outers
 
+def add_defect_2_info(defect, defect_types, info, score):
+    """
 
-def plots_parameters(config_info, result_loc, all_defect_types, pic_shape):
-    # 用于绘制双层饼图
-    inners = {"none": 0, "multi": 0}  # 内圈表示输入的图片的数量
-    outers = {}  # 外圈表示检测到的缺陷的数量
-    scores = {}  # 用于绘制置信度直方图
-    for d in all_defect_types:
-        inners[d] = 0
-        outers[d] = 0
-        outers["multi_" + d] = 0
-        scores[d] = []
-    inners["none"] = len(pic_shape) - len(result_loc)
-
-    # 用于绘制热力图
-    rr = config_info.PRE_PROCESS['size']['rows']
-    cc = config_info.PRE_PROCESS['size']['cols']
-    if not config_info.PRE_PROCESS['switch']:
-        height, width = rr * 100, rr * 100
-    else:
-        height, width = rr * 100, cc * 100
-    loc_matrix = np.zeros((height, width))
-
-    # 有缺陷的图片
-    for k, v in result_loc.items():
-        clses = []
-        for p in v:
-            _d, _x1, _x2, _y1, _y2, _s = p.split("_")[:6]
-            _x1, _x2, _y1, _y2, _s = int(_x1), int(_x2), int(_y1), int(_y2), float(_s)
-            clses.append(_d)  # 当前图片中检测到的所有的缺陷类型
-            scores[_d].append(_s)  # 添加置信度
-            # 长宽归一化
-            _x1 = int(_x1 * (width / pic_shape[k][1]))
-            _x2 = int(_x2 * (width / pic_shape[k][1]))
-            _y1 = int(_y1 * (height / pic_shape[k][0]))
-            _y2 = int(_y2 * (height / pic_shape[k][0]))
-            loc_matrix[height - _y2:height - _y1, _x1:_x2] += 1
-
-        # 当前图片只检测到1种缺陷
-        if len(set(clses)) == 1:
-            inners[clses[0]] += 1
-            outers[clses[0]] += len(clses)
-        # 当前图片检测到多种缺陷
+    :param defect:
+    :param defect_types:
+    :param info:
+    :param score:
+    :return:
+    """
+    score = float(score)
+    if defect in defect_types:
+        if defect in info.keys():
+            info[defect].append(score)
         else:
-            inners["multi"] += 1
-            for p in set(clses):
-                outers["multi_" + p] += clses.count(p)
-
-    return inners, outers, scores, loc_matrix
+            info[defect] = [score]
 
 
 def main():
@@ -703,7 +599,7 @@ def main():
     # --------------------------------------------------------
     # 一、读取配置文件
     # 1.1 检查配置文件是否准确
-    # 1.2 正确则读取配置文件
+    # 1.2 正确则读取配置文件，
     # 1.3 从配置文件中获取模型相关信息，主要是：缺陷类型，置信度，模型路径
     config_path = r"config/config.yml"
     cfgs = Config(config_path)
@@ -732,9 +628,7 @@ def main():
 
     # 四、画图
     # 缺陷类型
-    all_defect_types = []
-    for i in cfgs.model_infos.values():
-        all_defect_types.extend(i['threshold'].keys())
+    all_defect_types = cfgs.types_and_ratios.keys()
     # 读取output_total.csv
     csv_path = os.path.join(cfgs.OUTPUT_FOLDER, 'csv', 'output_total.csv')
     result_df = pd.read_csv(csv_path)
@@ -742,11 +636,7 @@ def main():
     save_folder = os.path.join(cfgs.OUTPUT_FOLDER, "img_with_box")
 
     # 开始画图
-    md_path = os.path.join(cfgs.OUTPUT_FOLDER, 'summary.md')  # markdown文件路径
-    f_md = open(md_path, "w")
-    f_md.write(report_title())
-    f_md.write(basic_info(cfgs))
-
+    gold_info = None
     # 4.1 无答案
     if not cfgs.EVALUATION['switch']:
         # 4.1.1 无前处理
@@ -757,36 +647,57 @@ def main():
         else:
             img_folder = cfgs.PRE_PROCESS['origin_folder']
             result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=True)
-
         # draw bbox
-        draw_bbox_normal(img_folder, save_folder, result_loc)
+        draw_bbox_no_answer(img_folder, save_folder, result_loc)
     # 4.2 有答案
     else:
         # 4.2.1 无前处理
         gold_df = pd.read_csv(cfgs.EVALUATION['csv_path'])
+        gold_info = {}
         # 无前处理
         if not cfgs.PRE_PROCESS['switch']:
             img_folder = cfgs.IMG_CUT_FOLDER
             result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=False)
             gold_loc = get_gold_defect_info(gold_df, all_defect_types, pre_process=False)
             # draw bbox
-            inners_gt, outers_gt = draw_bbox_with_answer_no_pre(img_folder, save_folder, result_loc, gold_loc,
-                                                                all_defect_types)
+            draw_bbox_with_answer_no_pre(img_folder, save_folder, result_loc, gold_loc)
+            # 答案相关信息
+            for defects in gold_loc.values():
+                for i in defects:
+                    add_defect_2_info(i, all_defect_types, gold_info, 1)
         # 4.2.2 有前处理
         else:
             img_folder = cfgs.PRE_PROCESS['origin_folder']
             result_loc = get_output_defect_info(result_df, all_defect_types, pre_process=True)
             gold_loc = get_gold_defect_info(gold_df, all_defect_types, pre_process=True)
             # draw bbox
-            inners_gt, outers_gt = draw_bbox_with_answer_with_pre(img_folder, save_folder, result_loc, gold_loc,
-                                                                  line_dict, all_defect_types)
+            draw_bbox_with_answer_with_pre(img_folder, save_folder, result_loc, gold_loc, line_dict)
+            # 答案相关信息
+            r = cfgs.PRE_PROCESS['size']['rows']
+            c = cfgs.PRE_PROCESS['size']['cols']
+            loc_matrix = np.zeros((r, c))  # 用于绘制热力图
+            for defects in gold_loc.values():
+                for i in defects:
+                    d_type, row, col = i.split("_")
+                    loc_matrix[int(row) - 1, int(col) - 1] += 1
+                    add_defect_2_info(d_type, all_defect_types, gold_info, 1)
+            # 绘制答案中缺陷分布热力图
+            plt.figure(figsize=(12, 6))
+            plt.pcolor(loc_matrix, cmap=plt.cm.Reds)
+            plt.savefig(os.path.join(cfgs.OUTPUT_FOLDER, 'pics', "heatmap_ground_truth.jpg"))
 
-    # 继续输出md文件
-    inner_res, outer_res, score_res, loc_matrix_res = plots_parameters(cfgs, result_loc, all_defect_types, pic_shape)
-    f_md.write(module_results_info(cfgs, inner_res, outer_res, score_res, loc_matrix_res))
-    if cfgs.EVALUATION['switch']:
-        f_md.write(module_evaluation(cfgs, all_defect_types, inners_gt, outers_gt, gold_loc, result_df))
-    f_md.close()
+    # 五、报告输出
+    md_path = os.path.join(cfgs.OUTPUT_FOLDER, 'summary.md')
+    with open(md_path, "w") as f_md:
+        f_md.write(title_str())
+        f_md.write(module_basic_info(cfgs))
+        f_md.write(module_config_info(cfgs))
+        f_md.write(module_results_info(cfgs, result_loc))
+
+        # 若需要评估，则再增加最后部分
+        if cfgs.EVALUATION['switch']:
+            if gold_info is not None:
+                f_md.write(module_evaluation(cfgs, gold_info, result_df))
 
     logger.info('===========================================================')
     logger.info('!!!finish write md file')

@@ -417,6 +417,45 @@ class LabelHandler:
                             if not os.path.exists(dst_img):
                                 shutil.copyfile(img, dst_img)
 
+    @classmethod
+    def get_img_xml_pair(cls, in_dir, out_dir):
+        
+        # 生成保存文件夹
+        if os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
+        os.mkdir(out_dir)
+        os.makedirs(os.path.join(out_dir, 'img'))
+        os.makedirs(os.path.join(out_dir, 'xml'))
 
-LabelHandler.del_empty_xml(r"F:\xuhan\xml")
-LabelHandler.print_all_labels(r"F:\xuhan\xml")
+        # 检验是否是xml文件
+        xml_list = os.listdir(os.path.join(in_dir, "xml"))
+        for i in xml_list:
+            if not i.endswith(".xml"):
+                print("{} is not xml file".format(i))
+                xml_list.remove(i)
+
+        # 
+        for i in xml_list:
+            name = i[:-4]
+            img_path = os.path.join(in_dir, "img", name + ".jpg")
+            xml_path = os.path.join(in_dir, "xml", name + ".xml")
+            if os.path.exists(img_path):
+                shutil.copyfile(img_path, os.path.join(out_dir, "img", name + ".jpg"))
+                shutil.copyfile(xml_path, os.path.join(out_dir, "xml", name + ".xml"))
+        
+        
+
+
+
+LabelHandler.del_empty_xml(r"D:\Desktop\402_v3_lxw\xml")
+# LabelHandler.change_label_name(
+#     r"D:\Desktop\dongfang_4+5\3_xuhan\xuhan\xml", 
+#     r"D:\Desktop\dongfang_4+5\3_xuhan\xuhan\xml2", 
+#     {("negative", ): "neg"}
+# )
+
+# LabelHandler.get_img_xml_pair(
+#     r"D:\Desktop\dongfang_4+5\xuhan\neg", 
+#     r"D:\Desktop\dongfang_4+5\xuhan\neg_true"
+# )
+LabelHandler.print_all_labels(r"D:\Desktop\402_v3_lxw\xml")
