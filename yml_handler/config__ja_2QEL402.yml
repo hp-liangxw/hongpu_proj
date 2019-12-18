@@ -1,0 +1,276 @@
+all_defects:
+-   config: 0-7mm
+    name: yinlie
+    text: 隐裂
+    will_detect: true
+-   config: 25%-以上
+    name: xuhan
+    text: 虚焊
+    will_detect: true
+-   config: 25%-以上
+    name: shixiao
+    text: 失效
+    will_detect: false
+-   config: 5-10%
+    name: heipian
+    text: 黑片
+    will_detect: false
+-   config: 5-10%
+    name: heidian
+    text: 黑点
+    will_detect: false
+-   config: 不分级区分
+    name: hundang
+    text: 混档
+    will_detect: false
+-   config: 5-10%
+    name: rongsi
+    text: 熔丝
+    will_detect: false
+-   config: 5-10%
+    name: duanshan
+    text: 断栅
+    will_detect: false
+-   config: 5-10%
+    name: tongxinyuan
+    text: 同心圆
+    will_detect: false
+-   config: 不分级区分
+    name: duanlu
+    text: 短路
+    will_detect: false
+-   config: 5-10%
+    name: liangban
+    text: 亮斑
+    will_detect: false
+-   config: 不分级区分
+    name: wangluopian
+    text: 网络片
+    will_detect: false
+-   config: 5-10%
+    name: quejiao
+    text: 缺角
+    will_detect: false
+-   config: 0-5%
+    name: shouzhiyin
+    text: 手指印
+    will_detect: false
+-   config: 0-5%
+    name: pidaiyin
+    text: 皮带印
+    will_detect: false
+-   config: ''
+    name: qita
+    text: 其它
+    will_detect: false
+camera_station:
+    ASIC_dir_structure: true
+    async_mode: true
+    close_dialog_key: RETURN
+    component_recipe:
+        active_recipe: ''
+        recipe_list:
+        -   name: 示例一
+            rules_by_class:
+                yinlie:
+                -   conditions:
+                        area_ratio:
+                        - 0
+                        - 0.13
+                        prob:
+                        - 0
+                        - 0.9
+                    max_cells_per_compoment: 0
+                    max_defects_per_cell: 0
+                -   conditions:
+                        area_ratio:
+                        - 0
+                        - 0.15
+                        prob:
+                        - 0
+                        - 0.9
+                    max_cells_per_compoment: 0
+                    max_defects_per_cell: 1
+    confirm_mode: all
+    defect_recipe:
+        active_recipe: ''
+        code: ja1234
+        recipe_list:
+        -   name: 示例一
+            rules_by_class:
+                yinlie:
+                    fake_defect_rules:
+                    -   prob:
+                        - 0
+                        - 0.8
+                    true_defect_rules:
+                    -   prob:
+                        - 0.99
+                        - 1
+    dialog_of_equip_client_window_title: Defect
+    el_exclude_subdirs:
+    - OK
+    - NG
+    - LL
+    - YL
+    - XH
+    - HD
+    - HB
+    - QT
+    - rawZ4
+    el_result_dir: E:\hongpu\el_vi_result
+    el_result_dir_2: ''
+    el_tracking_dir: C:/Users/C30/Desktop/test/img
+    el_transfer_img:
+        dir: ''
+        keep_dir_structure: false
+        remove_origin_img: false
+    enable_calibration_setting: false
+    enable_close_dialog_of_equip_client_window: true
+    enable_equip_client_window_test: true
+    enable_equip_server: true
+    enable_send_text_to_equip_client_window: false
+    enable_send_virtualkey_to_equip_client_window: true
+    equip_client_window_title: ASIC J12S EnMes V1.0_uSXT20190529
+    equipment_id: 1EL101
+    facility_id: XTM01
+    filter_overkilled:
+        enabled: false
+    flight: 白班
+    flip_x:
+        enabled: false
+    image_source:
+        cols: 20
+        edge_removed: false
+        half_plate: true
+        module_type: 9BB
+        monocrystal: true
+        rows: 6
+    io:
+        baudrate: 9600
+        enabled: false
+        output_duration: 1
+        port: ''
+    move_module_file_to_specified_classification: true
+    old_file_4_tracking: 0
+    pre_process:
+    -   cell_cut_setting:
+            auto_algo: EL基础切片
+            col_lines: []
+            mode: auto
+            row_lines: []
+        edge_cut_setting:
+            auto_algo: ''
+            bottom_left: []
+            bottom_right: []
+            mode: none
+            top_left: []
+            top_right: []
+        file_name_reg: .*.jpg
+        name: 默认
+    product_line: L4
+    remove_slice_img: true
+    request_defect_result_timeout: 40
+    send_ok_ng_2_py:
+        directory: /Users/leojiang/Desktop/test/save
+        enabled: all
+    serial_number_input:
+        enabled: false
+        max_per_component: 12
+    shifts:
+    -   day_shift: -1
+        end: '8:00'
+        name: 晚班
+        start: 0:00
+    -   day_shift: 0
+        end: '20:00'
+        name: 白班
+        start: '8:00'
+    -   day_shift: 0
+        end: '24:00'
+        name: 晚班
+        start: '20:00'
+    sleep_4_img_writing: 0.1
+    sleep_time_for_equip_client_window: 0.5
+    slice_mode:
+        TM_algorithm_on: true
+        algorithm: default
+        enabled: true
+        flip_slice_index: true
+        h_flip: true
+        perspective_parameters: ja_2Q402_60_perspective.pkl
+        pre_0_flip_enabled: true
+        source_image_flipped: false
+        undistort_parameters: ja_camera_all.pkl
+        v_flip: false
+    stage: cengqian
+    station_info:
+        manufacturer: peide
+    timeout_for_activating_main_window: 8000
+    ui_btn_create_delete_edit: false
+    virtual_key_id_for_ng: 123
+    virtual_key_id_for_ok: 119
+    wg_exclude_subdirs:
+    - OK
+    - NG
+    wg_saving_dir: ''
+    wg_tracking_dir: ''
+confirm_station:
+    ai_accuracy:
+        missing: 0
+        over_kill: 0
+    confirm_button_num: 4
+    demo: false
+    display_row_symble_as_alphabet: true
+    enable_camera_station: true
+    hotkey:
+        confirm_ng: F2
+        confirm_ok: F1
+        miss: f4
+        overkill: f5
+        wg: f6
+    manually_confirm: false
+    ok_ng_count:
+        ng: 0
+        ok: 0
+    result_save:
+        save_missing: 1
+        save_ng: 1
+        save_ng_cell: 0
+        save_ng_with_box: 1
+        save_overkill: 1
+    sound_recipe: 0
+    stack_graphics_view:
+        orientation: vertical
+        split_cols: 1
+        split_rows: 1
+    window:
+        is_on_top: false
+        position:
+        - 28
+        - 23
+        size:
+        - 1248
+        - 676
+debug:
+    enabled: false
+    wait_for_next_image: 5
+functions:
+    el: true
+    wg: false
+mes:
+    enabled: false
+    wsdl: http://172.26.8.64:8888/mycim2/services/JobManagementWebService?wsdl
+servers:
+    confirm_server: 127.0.0.1:8003
+    platform: 172.26.23.254:8001
+    platform_enabled: false
+    station_server: 127.0.0.1:8002
+    vi_server: 172.26.23.253:8005
+window:
+    position:
+    - 28
+    - 23
+    size:
+    - 1248
+    - 676

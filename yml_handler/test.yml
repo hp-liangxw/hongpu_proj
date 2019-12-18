@@ -1,0 +1,11 @@
+name: Ê¾ÀýÒ»
+rules_by_class:
+  yinlie:
+    fake_defect_rules:
+    - prob:
+      - 0
+      - 0.8
+    true_defect_rules:
+    - prob:
+      - 0.99
+      - 1

@@ -447,15 +447,15 @@ class LabelHandler:
 
 
 
-LabelHandler.del_empty_xml(r"D:\Desktop\402_v3_lxw\xml")
+# LabelHandler.del_empty_xml(r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\xml")
 # LabelHandler.change_label_name(
 #     r"D:\Desktop\dongfang_4+5\3_xuhan\xuhan\xml", 
 #     r"D:\Desktop\dongfang_4+5\3_xuhan\xuhan\xml2", 
 #     {("negative", ): "neg"}
 # )
 
-# LabelHandler.get_img_xml_pair(
-#     r"D:\Desktop\dongfang_4+5\xuhan\neg", 
-#     r"D:\Desktop\dongfang_4+5\xuhan\neg_true"
-# )
-LabelHandler.print_all_labels(r"D:\Desktop\402_v3_lxw\xml")
+LabelHandler.get_img_xml_pair(
+    r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\all",
+    r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\pair"
+)
+# LabelHandler.print_all_labels(r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\xml")

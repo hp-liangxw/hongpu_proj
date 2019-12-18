@@ -11,6 +11,7 @@ seaborn = "==0.9.0"
 pyyaml = "==5.1.2"
 opencv-python = "==4.1.1.26"
 xpinyin = "==0.5.6"
+fire = "*"
 
 [dev-packages]
 pylint = "*"

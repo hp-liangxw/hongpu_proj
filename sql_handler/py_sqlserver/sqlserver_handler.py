@@ -3,7 +3,7 @@ import datetime as dt
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from py_sqlserver.sqlserver_engine import Table1, TableLog
+from sql_handler.py_sqlserver.sqlserver_engine import Table1, TableLog
 
 engine = create_engine('mssql+pymssql://sa:123456@127.0.0.1:1434/longi_test')
 
