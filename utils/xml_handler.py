@@ -447,7 +447,7 @@ class LabelHandler:
 
 
 
-# LabelHandler.del_empty_xml(r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\xml")
+# LabelHandler.del_empty_xml(r"D:\Desktop\501_v3_class_xuhan_2\xml")
 # LabelHandler.change_label_name(
 #     r"D:\Desktop\dongfang_4+5\3_xuhan\xuhan\xml", 
 #     r"D:\Desktop\dongfang_4+5\3_xuhan\xuhan\xml2", 
@@ -455,7 +455,7 @@ class LabelHandler:
 # )
 
 LabelHandler.get_img_xml_pair(
-    r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\all",
-    r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\pair"
+    r"D:\Desktop\501_v3_class_xuhan_2\all",
+    r"D:\Desktop\501_v3_class_xuhan_2\pair"
 )
-# LabelHandler.print_all_labels(r"D:\Desktop\xuhan\501_V2_class_xuhan_part1\xml")
+# LabelHandler.print_all_labels(r"D:\Desktop\501_v3_class_xuhan_2\xml")

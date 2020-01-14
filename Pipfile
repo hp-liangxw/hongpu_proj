@@ -1,6 +1,6 @@
 [[source]]
-url = "https://pypi.doubanio.com/simple"
-# https://pypi.doubanio.com/simple
+#url = "https://pypi.doubanio.com/simple"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 name = "pypi"
 
 [packages]
@@ -12,6 +12,8 @@ pyyaml = "==5.1.2"
 opencv-python = "==4.1.1.26"
 xpinyin = "==0.5.6"
 fire = "*"
+redis = "*"
+pywin32 = "==223"
 
 [dev-packages]
 pylint = "*"

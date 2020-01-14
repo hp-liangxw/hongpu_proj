@@ -1,0 +1,58 @@
+{
+	"configs" : [
+		{
+			"remarks" : "",
+			"id" : "E8DF4EAE757DE1EAFCD6F4114F3C8FAA",
+			"server" : "95.169.18.14",
+			"server_port" : 443,
+			"server_udp_port" : 0,
+			"password" : "MzliNmQxYj",
+			"method" : "aes-256-cfb",
+			"protocol" : "origin",
+			"protocolparam" : "",
+			"obfs" : "plain",
+			"obfsparam" : "",
+			"remarks_base64" : "",
+			"group" : "hongpucorp",
+			"enable" : true,
+			"udp_over_tcp" : false
+		}
+	],
+	"index" : 0,
+	"random" : false,
+	"sysProxyMode" : 2,
+	"shareOverLan" : false,
+	"localPort" : 1080,
+	"localAuthPassword" : "WCNeDXBPW3RXinUK4qnt",
+	"dnsServer" : "",
+	"reconnectTimes" : 2,
+	"randomAlgorithm" : 3,
+	"randomInGroup" : false,
+	"TTL" : 0,
+	"connectTimeout" : 5,
+	"proxyRuleMode" : 2,
+	"proxyEnable" : false,
+	"pacDirectGoProxy" : false,
+	"proxyType" : 0,
+	"proxyHost" : null,
+	"proxyPort" : 0,
+	"proxyAuthUser" : null,
+	"proxyAuthPass" : null,
+	"proxyUserAgent" : null,
+	"authUser" : null,
+	"authPass" : null,
+	"autoBan" : false,
+	"sameHostForSameTarget" : false,
+	"keepVisitTime" : 180,
+	"isHideTips" : false,
+	"nodeFeedAutoUpdate" : true,
+	"serverSubscribes" : [
+
+	],
+	"token" : {
+
+	},
+	"portMap" : {
+
+	}
+}
