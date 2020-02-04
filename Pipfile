@@ -14,6 +14,7 @@ xpinyin = "==0.5.6"
 fire = "*"
 redis = "*"
 pywin32 = "==223"
+requests = "*"
 
 [dev-packages]
 pylint = "*"
